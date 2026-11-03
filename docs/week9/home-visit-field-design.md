@@ -144,21 +144,9 @@ AI 需求草稿：
 
 ## 待后端确认
 
-已对照《邻宠帮 · 接口对齐文档 v0（完整版）》检查：
-
-- `home_visit` 已在后端 `service_type` 枚举中定义，与本设计一致。
-- `ServiceRequest.window_start`、`window_end`、`location`、`budget`、`handover_notes`、`emergency_contact`、`fee_type` 均为后端必填；因此本设计中这些字段在 AI 草稿阶段可以暂缺或由资料补齐，但最终创建请求前必须全部补齐。
-- `precautions`、`raw_text` 在后端可为空，与本设计一致。
-- `ChecklistItem.content` 为必填文本，适合承载照料事项、频率、特殊宠物和额外要求的拼接结果；本设计不新增数据库字段。
-- 后端 `PetProfile` 已有可空的 `supplies_location` 字段，但本设计不把 AI 的 `supplies_location` 直接扩展为新的数据库字段；是否读取或复用该既有宠物档案字段，需要产品和后端确认。
-- 后端 `POST /ai/parse` 返回 `questions[]`，与本设计一致。
-
-仍需后端或产品确认的问题：
-
 - `service_time` 的自然语言时间范围如何按 `reference_time`、`timezone` 转换为 `window_start` 和 `window_end`，以及默认时长或时间窗口规则。
 - `care_items[].frequency`、`special_note`、`target_pet` 拼接进 `ChecklistItem.content` 时的统一文本格式。
 - 默认照看宠主档案中全部相关宠物时，后端如何通过 `pet_id`（当前创建接口要求单个 `pet_id`）表达该范围；是否由后端根据宠物档案展开清单。
 - `expected_duration_minutes` 是后端创建接口必填字段，但本 AI 字段设计未单独提取；其来源需要由前端、用户资料或平台默认值确定。
 - `supplies_location` 是否优先读取 `PetProfile.supplies_location`，以及在多宠物或不同用品位置时如何处理。
 
-本设计不新增后端数据库字段，不修改后端接口文档；在上述规则确认前，不将补充假设视为已冻结的后端契约。
