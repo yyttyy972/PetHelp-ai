@@ -1,0 +1,285 @@
+{
+  "title": "邻宠帮 AI 需求解析样例输入集",
+  "version": "0.1",
+  "date": "2026-11-03",
+  "description": "第九周代表性样例初版。样例来自三类字段设计文档中的原始示例及其明确规则所要求的边界变体；用于 Prompt 走查和 Schema 校验，不等同于最终约 45 条人工标注评估集。",
+  "output_contract": {
+    "draft": "按 service_type 使用对应场景的 AI 中间字段",
+    "questions": "顶层字符串数组；无待问问题时为 []"
+  },
+  "cases": [
+    {
+      "id": "EB-01",
+      "scene": "errand_buy",
+      "kind": "source_example",
+      "user_input": "帮我买一袋猫粮，预算100元以内，送到社区东门。",
+      "context": {},
+      "expected": {
+        "service_type": "errand_buy",
+        "product_name": "猫粮",
+        "product_detail": null,
+        "quantity": 1,
+        "unit": "袋",
+        "budget_max": 100,
+        "delivery_location": "社区东门",
+        "delivery_time": null,
+        "precautions": null,
+        "questions_should_cover": [
+          "商品细节是否有要求",
+          "具体送达时间范围"
+        ]
+      },
+      "notes": "商品细节是可选补问；具体送达时间无法从输入确定，最终创建前必须补问。"
+    },
+    {
+      "id": "EB-02",
+      "scene": "errand_buy",
+      "kind": "rule_variant",
+      "user_input": "帮我买一袋猫粮，预算100元以内，送到社区东门，品牌和口味不在意，尽快送到。",
+      "context": {},
+      "expected": {
+        "service_type": "errand_buy",
+        "product_name": "猫粮",
+        "product_detail": null,
+        "quantity": 1,
+        "unit": "袋",
+        "budget_max": 100,
+        "delivery_location": "社区东门",
+        "delivery_time": null,
+        "precautions": null,
+        "questions_should_cover": [
+          "具体送达时间范围"
+        ]
+      },
+      "notes": "用户明确表示不在意商品细节时，不再追问 product_detail；“尽快”无法转换为具体窗口，仍需补问。"
+    },
+    {
+      "id": "EB-03",
+      "scene": "errand_buy",
+      "kind": "rule_variant",
+      "user_input": "帮我买猫粮。",
+      "context": {},
+      "expected": {
+        "service_type": "errand_buy",
+        "product_name": "猫粮",
+        "product_detail": null,
+        "quantity": null,
+        "unit": null,
+        "budget_max": null,
+        "delivery_location": null,
+        "delivery_time": null,
+        "precautions": null,
+        "questions_should_cover": [
+          "购买数量",
+          "数量单位",
+          "预算上限",
+          "交付地点",
+          "具体送达时间范围"
+        ]
+      },
+      "notes": "多个最终必需信息缺失时集中补问；不能自行补默认数量、预算或地点。"
+    },
+    {
+      "id": "HV-01",
+      "scene": "home_visit",
+      "kind": "source_example_with_rule_check",
+      "user_input": "家里的猫都喂一次粮、换一次水，明天下午上门，地点是我家。",
+      "context": {
+        "pet_profile_scope": "宠主档案中的全部相关宠物"
+      },
+      "expected": {
+        "service_type": "home_visit",
+        "care_items": [
+          {
+            "content": "喂猫粮",
+            "frequency": "1次",
+            "target_pet": null,
+            "special_note": null
+          },
+          {
+            "content": "换水",
+            "frequency": "1次",
+            "target_pet": null,
+            "special_note": null
+          }
+        ],
+        "supplies_location": null,
+        "service_time": "明天下午",
+        "location": "我家",
+        "precautions": null,
+        "handover_notes": null,
+        "emergency_contact": null,
+        "fee_type": null,
+        "budget": null,
+        "questions_should_cover": [
+          "具体上门时间范围"
+        ]
+      },
+      "notes": "按文档中的明确补问规则处理模糊时间；普通照料事项 target_pet 为 null。"
+    },
+    {
+      "id": "HV-02",
+      "scene": "home_visit",
+      "kind": "source_example",
+      "user_input": "家里的猫都喂一次粮，但小橘需要额外喂药。明天晚上来我家。",
+      "context": {
+        "pet_profile_scope": "宠主档案中的全部相关宠物"
+      },
+      "expected": {
+        "service_type": "home_visit",
+        "care_items": [
+          {
+            "content": "喂猫粮",
+            "frequency": "1次",
+            "target_pet": null,
+            "special_note": null
+          },
+          {
+            "content": "喂药",
+            "frequency": "额外1次",
+            "target_pet": "小橘",
+            "special_note": "按宠主提供的用药说明执行"
+          }
+        ],
+        "supplies_location": null,
+        "service_time": "明天晚上",
+        "location": "我家",
+        "precautions": null,
+        "handover_notes": null,
+        "emergency_contact": null,
+        "fee_type": null,
+        "budget": null,
+        "questions_should_cover": [
+          "具体上门时间范围",
+          "猫粮和药品放置位置"
+        ]
+      },
+      "notes": "不得推断药量或用药方案；用品位置可以追问。"
+    },
+    {
+      "id": "HV-03",
+      "scene": "home_visit",
+      "kind": "rule_variant",
+      "user_input": "明天晚上来我家照看猫。",
+      "context": {
+        "pet_profile_scope": "宠主档案中的全部相关宠物"
+      },
+      "expected": {
+        "service_type": "home_visit",
+        "care_items": [],
+        "supplies_location": null,
+        "service_time": "明天晚上",
+        "location": "我家",
+        "precautions": null,
+        "handover_notes": null,
+        "emergency_contact": null,
+        "fee_type": null,
+        "budget": null,
+        "questions_should_cover": [
+          "具体照料事项",
+          "具体上门时间范围"
+        ]
+      },
+      "notes": "没有明确照料事项时必须补问；不得自行生成喂食、换水等任务。"
+    },
+    {
+      "id": "DW-01",
+      "scene": "dog_walking",
+      "kind": "source_example",
+      "user_input": "明晚七点帮我遛旺财半小时，在小区里走。它见到大狗会害怕。",
+      "context": {
+        "pet_profile": "假设档案仅有一只狗旺财"
+      },
+      "expected": {
+        "service_type": "dog_walking",
+        "target_dogs": [
+          "旺财"
+        ],
+        "service_time": "明晚19:00开始，持续30分钟",
+        "duration_minutes": 30,
+        "route_note": "在小区里走",
+        "behavior_notes": "见到大狗会害怕",
+        "precautions": null,
+        "handover_notes": null,
+        "location": null,
+        "fee_type": null,
+        "budget": null,
+        "care_items_item_keys_in_order": [
+          "pickup",
+          "departure",
+          "return"
+        ],
+        "questions_should_cover": []
+      },
+      "notes": "单狗档案可自动确定目标；最终创建仍需从资料或页面补齐后端必填字段。"
+    },
+    {
+      "id": "DW-02",
+      "scene": "dog_walking",
+      "kind": "source_example",
+      "user_input": "明天下午帮我遛旺财和豆豆四十分钟。",
+      "context": {
+        "pet_profile": "假设档案确认旺财和豆豆均为宠主所属的狗"
+      },
+      "expected": {
+        "service_type": "dog_walking",
+        "target_dogs": [
+          "旺财",
+          "豆豆"
+        ],
+        "service_time": "明天下午",
+        "duration_minutes": 40,
+        "route_note": null,
+        "behavior_notes": null,
+        "precautions": null,
+        "handover_notes": null,
+        "location": null,
+        "fee_type": null,
+        "budget": null,
+        "care_items_item_keys_in_order": [
+          "pickup",
+          "departure",
+          "return"
+        ],
+        "questions_should_cover": [
+          "具体服务时间范围",
+          "行为特点（可简单询问）",
+          "路线要求（可选）"
+        ]
+      },
+      "notes": "目标已明确，不追问遛哪只；多狗草稿当前不能直接映射到后端单个 pet_id。"
+    },
+    {
+      "id": "DW-03",
+      "scene": "dog_walking",
+      "kind": "rule_variant",
+      "user_input": "明天下午帮我遛狗四十分钟。",
+      "context": {
+        "pet_profile": "假设档案中有多只狗，用户未指定本次目标"
+      },
+      "expected": {
+        "service_type": "dog_walking",
+        "target_dogs": [],
+        "service_time": "明天下午",
+        "duration_minutes": 40,
+        "route_note": null,
+        "behavior_notes": null,
+        "precautions": null,
+        "handover_notes": null,
+        "location": null,
+        "fee_type": null,
+        "budget": null,
+        "care_items_item_keys_in_order": [
+          "pickup",
+          "departure",
+          "return"
+        ],
+        "questions_should_cover": [
+          "本次遛哪只或哪几只狗",
+          "具体服务时间范围"
+        ]
+      },
+      "notes": "多只狗但目标未明确时必须补问，不默认全选；多狗映射问题待后端确认。"
+    }
+  ]
+}

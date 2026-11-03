@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pethelp.local/schemas/ai-parse-v0.json",
+  "title": "PetHelp AI parse draft v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["draft", "questions"],
+  "properties": {
+    "draft": {
+      "oneOf": [
+        { "$ref": "#/$defs/errandBuyDraft" },
+        { "$ref": "#/$defs/homeVisitDraft" },
+        { "$ref": "#/$defs/dogWalkingDraft" }
+      ]
+    },
+    "questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "nullableNumber": { "type": ["number", "null"] },
+    "nonNegativeNumber": {
+      "anyOf": [
+        { "type": "number", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "positiveNullableInteger": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "null" }
+      ]
+    },
+    "careItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "frequency", "target_pet", "special_note"],
+      "properties": {
+        "content": { "type": "string" },
+        "frequency": { "$ref": "#/$defs/nullableString" },
+        "target_pet": { "$ref": "#/$defs/nullableString" },
+        "special_note": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "dogCareItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_key", "content", "special_note"],
+      "properties": {
+        "item_key": { "type": "string", "minLength": 1 },
+        "content": { "type": "string" },
+        "special_note": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "errandBuyDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_type", "product_name", "product_detail", "quantity", "unit", "budget_max", "delivery_location", "delivery_time", "precautions"],
+      "properties": {
+        "service_type": { "const": "errand_buy" },
+        "product_name": { "$ref": "#/$defs/nullableString" },
+        "product_detail": { "$ref": "#/$defs/nullableString" },
+        "quantity": { "$ref": "#/$defs/positiveNullableInteger" },
+        "unit": { "$ref": "#/$defs/nullableString" },
+        "budget_max": { "$ref": "#/$defs/nonNegativeNumber" },
+        "delivery_location": { "$ref": "#/$defs/nullableString" },
+        "delivery_time": { "$ref": "#/$defs/nullableString" },
+        "precautions": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "homeVisitDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_type", "care_items", "supplies_location", "service_time", "location", "precautions", "handover_notes", "emergency_contact", "fee_type", "budget"],
+      "properties": {
+        "service_type": { "const": "home_visit" },
+        "care_items": { "type": "array", "items": { "$ref": "#/$defs/careItem" } },
+        "supplies_location": { "$ref": "#/$defs/nullableString" },
+        "service_time": { "$ref": "#/$defs/nullableString" },
+        "location": { "$ref": "#/$defs/nullableString" },
+        "precautions": { "$ref": "#/$defs/nullableString" },
+        "handover_notes": { "$ref": "#/$defs/nullableString" },
+        "emergency_contact": { "$ref": "#/$defs/nullableString" },
+        "fee_type": { "type": ["string", "null"], "enum": ["free", "paid", null] },
+        "budget": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    },
+    "dogWalkingDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_type", "target_dogs", "service_time", "duration_minutes", "route_note", "behavior_notes", "precautions", "handover_notes", "location", "fee_type", "budget", "care_items"],
+      "properties": {
+        "service_type": { "const": "dog_walking" },
+        "target_dogs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "service_time": { "$ref": "#/$defs/nullableString" },
+        "duration_minutes": { "$ref": "#/$defs/positiveNullableInteger" },
+        "route_note": { "$ref": "#/$defs/nullableString" },
+        "behavior_notes": { "$ref": "#/$defs/nullableString" },
+        "precautions": { "$ref": "#/$defs/nullableString" },
+        "handover_notes": { "$ref": "#/$defs/nullableString" },
+        "location": { "$ref": "#/$defs/nullableString" },
+        "fee_type": { "type": ["string", "null"], "enum": ["free", "paid", null] },
+        "budget": { "$ref": "#/$defs/nonNegativeNumber" },
+        "care_items": {
+          "type": "array",
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/dogCareItem" }, { "properties": { "item_key": { "const": "pickup" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/dogCareItem" }, { "properties": { "item_key": { "const": "departure" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/dogCareItem" }, { "properties": { "item_key": { "const": "return" } } }] }
+          ],
+          "items": { "$ref": "#/$defs/dogCareItem" },
+          "minItems": 3
+        }
+      }
+    }
+  }
+}
