@@ -2,3 +2,5 @@ node_modules/
 dist/
 __pycache__/
 .env
+test-results/
+playwright-report/
