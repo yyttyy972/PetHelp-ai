@@ -12,8 +12,10 @@ from app import schemas as S
 from app.db import connection
 from app.config import COMMUNITY, JWT_SECRET, MEDIA_ROOT
 from app.core.security import hash_password, verify_password, token
+from . import match
 
-router=APIRouter(prefix="/api/v0")
+router=APIRouter(prefix="/api/v0")     
+router.include_router(match.router)    
 class Error(Exception):
     def __init__(self,status,code,message=None): self.status=status; self.code=code; self.message=message or code
 
