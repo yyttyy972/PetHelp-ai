@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pethelp.local/schemas/ai-parse-v1.json",
+  "title": "PetHelp AI parse response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["draft", "questions"],
+  "properties": {
+    "draft": {
+      "$comment": "应用层需校验 window_end 晚于 window_start、expected_duration_minutes 不超过时间窗口长度，以及 checklist_items[].pet_id 非 null 时属于同一 draft.pet_ids。",
+      "oneOf": [
+        { "$ref": "#/$defs/homeVisitDraft" },
+        { "$ref": "#/$defs/dogWalkingDraft" },
+        { "$ref": "#/$defs/errandBuyDraft" }
+      ]
+    },
+    "questions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "nullableString": {
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "nullableDateTime": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+        },
+        { "type": "null" }
+      ]
+    },
+    "nullableNonNegativeNumber": {
+      "anyOf": [
+        { "type": "number", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "nullablePositiveInteger": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "null" }
+      ]
+    },
+    "petIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/uuid" }
+    },
+    "checklistItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_key",
+        "pet_id",
+        "position",
+        "content",
+        "completion_condition",
+        "required"
+      ],
+      "properties": {
+        "item_key": { "type": "string", "minLength": 1 },
+        "pet_id": {
+          "$comment": "非 null 时必须属于同一 draft.pet_ids；该跨字段成员关系由应用层校验。",
+          "anyOf": [
+            { "$ref": "#/$defs/uuid" },
+            { "type": "null" }
+          ]
+        },
+        "position": { "type": "integer", "minimum": 1 },
+        "content": { "type": "string", "minLength": 1 },
+        "completion_condition": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "product_name": { "$ref": "#/$defs/nullableString" },
+        "quantity": { "$ref": "#/$defs/nullablePositiveInteger" },
+        "unit": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "homeVisitChecklist": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/checklistItem" }
+    },
+    "dogWalkingChecklist": {
+      "type": "array",
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/checklistItem" },
+            { "properties": { "item_key": { "const": "pickup" }, "position": { "const": 1 } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/checklistItem" },
+            { "properties": { "item_key": { "const": "departure" }, "position": { "const": 2 } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/checklistItem" },
+            { "properties": { "item_key": { "const": "return" }, "position": { "const": 3 } } }
+          ]
+        }
+      ],
+      "items": { "$ref": "#/$defs/checklistItem" }
+    },
+    "errandBuyChecklist": {
+      "type": "array",
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/checklistItem" },
+            {
+              "required": ["product_name", "quantity", "unit"],
+              "properties": {
+                "item_key": { "const": "purchase" },
+                "position": { "const": 1 },
+                "product_name": { "type": "string", "minLength": 1 },
+                "quantity": { "type": "integer", "minimum": 1 },
+                "unit": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/checklistItem" },
+            { "properties": { "item_key": { "const": "delivery" }, "position": { "const": 2 } } }
+          ]
+        }
+      ],
+      "items": { "$ref": "#/$defs/checklistItem" }
+    },
+    "homeVisitDraft": {
+      "$ref": "#/$defs/baseHomeVisitDraft"
+    },
+    "dogWalkingDraft": {
+      "$ref": "#/$defs/baseDogWalkingDraft"
+    },
+    "errandBuyDraft": {
+      "$ref": "#/$defs/baseErrandBuyDraft"
+    },
+    "baseHomeVisitDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pet_ids", "service_type", "fee_type", "window_start", "window_end", "expected_duration_minutes", "location", "budget", "handover_notes", "emergency_contact", "requirements", "precautions", "checklist_items"],
+      "properties": {
+        "pet_ids": { "$ref": "#/$defs/petIds" },
+        "service_type": { "const": "home_visit" },
+        "fee_type": { "type": ["string", "null"], "enum": ["free", "paid", null] },
+        "window_start": { "$ref": "#/$defs/nullableDateTime" },
+        "window_end": { "$ref": "#/$defs/nullableDateTime" },
+        "expected_duration_minutes": { "$ref": "#/$defs/nullablePositiveInteger" },
+        "location": { "$ref": "#/$defs/nullableString" },
+        "budget": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "handover_notes": { "$ref": "#/$defs/nullableString" },
+        "emergency_contact": { "$ref": "#/$defs/nullableString" },
+        "requirements": { "$ref": "#/$defs/nullableString" },
+        "precautions": { "$ref": "#/$defs/nullableString" },
+        "checklist_items": { "$ref": "#/$defs/homeVisitChecklist" }
+      }
+    },
+    "baseDogWalkingDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pet_ids", "service_type", "fee_type", "window_start", "window_end", "expected_duration_minutes", "location", "budget", "handover_notes", "emergency_contact", "requirements", "precautions", "checklist_items"],
+      "properties": {
+        "pet_ids": { "$ref": "#/$defs/petIds" },
+        "service_type": { "const": "dog_walking" },
+        "fee_type": { "type": ["string", "null"], "enum": ["free", "paid", null] },
+        "window_start": { "$ref": "#/$defs/nullableDateTime" },
+        "window_end": { "$ref": "#/$defs/nullableDateTime" },
+        "expected_duration_minutes": { "$ref": "#/$defs/nullablePositiveInteger" },
+        "location": { "$ref": "#/$defs/nullableString" },
+        "budget": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "handover_notes": { "$ref": "#/$defs/nullableString" },
+        "emergency_contact": { "$ref": "#/$defs/nullableString" },
+        "requirements": { "$ref": "#/$defs/nullableString" },
+        "precautions": { "$ref": "#/$defs/nullableString" },
+        "checklist_items": { "$ref": "#/$defs/dogWalkingChecklist" }
+      }
+    },
+    "baseErrandBuyDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pet_ids", "service_type", "fee_type", "window_start", "window_end", "expected_duration_minutes", "location", "budget", "handover_notes", "emergency_contact", "requirements", "precautions", "checklist_items"],
+      "properties": {
+        "pet_ids": { "$ref": "#/$defs/petIds" },
+        "service_type": { "const": "errand_buy" },
+        "fee_type": { "type": ["string", "null"], "enum": ["free", "paid", null] },
+        "window_start": { "$ref": "#/$defs/nullableDateTime" },
+        "window_end": { "$ref": "#/$defs/nullableDateTime" },
+        "expected_duration_minutes": { "$ref": "#/$defs/nullablePositiveInteger" },
+        "location": { "$ref": "#/$defs/nullableString" },
+        "budget": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "handover_notes": { "$ref": "#/$defs/nullableString" },
+        "emergency_contact": { "$ref": "#/$defs/nullableString" },
+        "requirements": { "$ref": "#/$defs/nullableString" },
+        "precautions": { "$ref": "#/$defs/nullableString" },
+        "checklist_items": { "$ref": "#/$defs/errandBuyChecklist" }
+      }
+    }
+  }
+}
