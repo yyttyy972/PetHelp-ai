@@ -1,285 +1,178 @@
 {
-  "title": "邻宠帮 AI 需求解析样例输入集",
-  "version": "0.1",
-  "date": "2026-11-03",
-  "description": "第九周代表性样例初版。样例来自三类字段设计文档中的原始示例及其明确规则所要求的边界变体；用于 Prompt 走查和 Schema 校验，不等同于最终约 45 条人工标注评估集。",
-  "output_contract": {
-    "draft": "按 service_type 使用对应场景的 AI 中间字段",
-    "questions": "顶层字符串数组；无待问问题时为 []"
-  },
+  "title": "邻宠帮 AI 需求解析完整示例",
+  "version": "1.0",
   "cases": [
     {
-      "id": "EB-01",
-      "scene": "errand_buy",
-      "kind": "source_example",
-      "user_input": "帮我买一袋猫粮，预算100元以内，送到社区东门。",
-      "context": {},
-      "expected": {
-        "service_type": "errand_buy",
-        "product_name": "猫粮",
-        "product_detail": null,
-        "quantity": 1,
-        "unit": "袋",
-        "budget_max": 100,
-        "delivery_location": "社区东门",
-        "delivery_time": null,
-        "precautions": null,
-        "questions_should_cover": [
-          "商品细节是否有要求",
-          "具体送达时间范围"
-        ]
-      },
-      "notes": "商品细节是可选补问；具体送达时间无法从输入确定，最终创建前必须补问。"
-    },
-    {
-      "id": "EB-02",
-      "scene": "errand_buy",
-      "kind": "rule_variant",
-      "user_input": "帮我买一袋猫粮，预算100元以内，送到社区东门，品牌和口味不在意，尽快送到。",
-      "context": {},
-      "expected": {
-        "service_type": "errand_buy",
-        "product_name": "猫粮",
-        "product_detail": null,
-        "quantity": 1,
-        "unit": "袋",
-        "budget_max": 100,
-        "delivery_location": "社区东门",
-        "delivery_time": null,
-        "precautions": null,
-        "questions_should_cover": [
-          "具体送达时间范围"
-        ]
-      },
-      "notes": "用户明确表示不在意商品细节时，不再追问 product_detail；“尽快”无法转换为具体窗口，仍需补问。"
-    },
-    {
-      "id": "EB-03",
-      "scene": "errand_buy",
-      "kind": "rule_variant",
-      "user_input": "帮我买猫粮。",
-      "context": {},
-      "expected": {
-        "service_type": "errand_buy",
-        "product_name": "猫粮",
-        "product_detail": null,
-        "quantity": null,
-        "unit": null,
-        "budget_max": null,
-        "delivery_location": null,
-        "delivery_time": null,
-        "precautions": null,
-        "questions_should_cover": [
-          "购买数量",
-          "数量单位",
-          "预算上限",
-          "交付地点",
-          "具体送达时间范围"
-        ]
-      },
-      "notes": "多个最终必需信息缺失时集中补问；不能自行补默认数量、预算或地点。"
-    },
-    {
       "id": "HV-01",
-      "scene": "home_visit",
-      "kind": "source_example_with_rule_check",
-      "user_input": "家里的猫都喂一次粮、换一次水，明天下午上门，地点是我家。",
+      "service_type": "home_visit",
+      "user_input": "明天下午两点到三点来我家，给年糕喂一次猫粮并换水，猫粮在厨房柜子里，别开阳台门。预计半小时，有偿，预算30元。",
       "context": {
-        "pet_profile_scope": "宠主档案中的全部相关宠物"
-      },
-      "expected": {
-        "service_type": "home_visit",
-        "care_items": [
+        "reference_time": "2026-11-13T10:00:00+08:00",
+        "timezone": "Asia/Shanghai",
+        "default_location": "春和社区3栋1202室",
+        "handover_notes": "门禁由宠主远程开启，钥匙放在密码钥匙盒",
+        "emergency_contact": "宠主 13800000000",
+        "pets": [
           {
-            "content": "喂猫粮",
-            "frequency": "1次",
-            "target_pet": null,
-            "special_note": null
-          },
-          {
-            "content": "换水",
-            "frequency": "1次",
-            "target_pet": null,
-            "special_note": null
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "年糕",
+            "species": "cat"
           }
-        ],
-        "supplies_location": null,
-        "service_time": "明天下午",
-        "location": "我家",
-        "precautions": null,
-        "handover_notes": null,
-        "emergency_contact": null,
-        "fee_type": null,
-        "budget": null,
-        "questions_should_cover": [
-          "具体上门时间范围"
         ]
       },
-      "notes": "按文档中的明确补问规则处理模糊时间；普通照料事项 target_pet 为 null。"
-    },
-    {
-      "id": "HV-02",
-      "scene": "home_visit",
-      "kind": "source_example",
-      "user_input": "家里的猫都喂一次粮，但小橘需要额外喂药。明天晚上来我家。",
-      "context": {
-        "pet_profile_scope": "宠主档案中的全部相关宠物"
-      },
-      "expected": {
-        "service_type": "home_visit",
-        "care_items": [
-          {
-            "content": "喂猫粮",
-            "frequency": "1次",
-            "target_pet": null,
-            "special_note": null
-          },
-          {
-            "content": "喂药",
-            "frequency": "额外1次",
-            "target_pet": "小橘",
-            "special_note": "按宠主提供的用药说明执行"
-          }
-        ],
-        "supplies_location": null,
-        "service_time": "明天晚上",
-        "location": "我家",
-        "precautions": null,
-        "handover_notes": null,
-        "emergency_contact": null,
-        "fee_type": null,
-        "budget": null,
-        "questions_should_cover": [
-          "具体上门时间范围",
-          "猫粮和药品放置位置"
-        ]
-      },
-      "notes": "不得推断药量或用药方案；用品位置可以追问。"
-    },
-    {
-      "id": "HV-03",
-      "scene": "home_visit",
-      "kind": "rule_variant",
-      "user_input": "明天晚上来我家照看猫。",
-      "context": {
-        "pet_profile_scope": "宠主档案中的全部相关宠物"
-      },
-      "expected": {
-        "service_type": "home_visit",
-        "care_items": [],
-        "supplies_location": null,
-        "service_time": "明天晚上",
-        "location": "我家",
-        "precautions": null,
-        "handover_notes": null,
-        "emergency_contact": null,
-        "fee_type": null,
-        "budget": null,
-        "questions_should_cover": [
-          "具体照料事项",
-          "具体上门时间范围"
-        ]
-      },
-      "notes": "没有明确照料事项时必须补问；不得自行生成喂食、换水等任务。"
+      "output": {
+        "draft": {
+          "pet_ids": ["11111111-1111-4111-8111-111111111111"],
+          "service_type": "home_visit",
+          "fee_type": "paid",
+          "window_start": "2026-11-14T14:00:00+08:00",
+          "window_end": "2026-11-14T15:00:00+08:00",
+          "expected_duration_minutes": 30,
+          "location": "春和社区3栋1202室",
+          "budget": 30,
+          "handover_notes": "门禁由宠主远程开启，钥匙放在密码钥匙盒",
+          "emergency_contact": "宠主 13800000000",
+          "requirements": null,
+          "precautions": "禁止打开阳台门",
+          "checklist_items": [
+            {
+              "item_key": "feed_food",
+              "pet_id": "11111111-1111-4111-8111-111111111111",
+              "position": 1,
+              "content": "给年糕喂一次猫粮；猫粮位于厨房柜子里",
+              "completion_condition": "完成一次喂食并记录完成情况",
+              "required": true
+            },
+            {
+              "item_key": "change_water",
+              "pet_id": "11111111-1111-4111-8111-111111111111",
+              "position": 2,
+              "content": "为年糕更换饮用水",
+              "completion_condition": "水碗已清理并换上干净饮用水",
+              "required": true
+            }
+          ]
+        },
+        "questions": []
+      }
     },
     {
       "id": "DW-01",
-      "scene": "dog_walking",
-      "kind": "source_example",
-      "user_input": "明晚七点帮我遛旺财半小时，在小区里走。它见到大狗会害怕。",
+      "service_type": "dog_walking",
+      "user_input": "明晚七点到八点帮我遛旺财半小时，在小区里走。它见到大狗会害怕。免费互助，地点是我家门口。",
       "context": {
-        "pet_profile": "假设档案仅有一只狗旺财"
-      },
-      "expected": {
-        "service_type": "dog_walking",
-        "target_dogs": [
-          "旺财"
-        ],
-        "service_time": "明晚19:00开始，持续30分钟",
-        "duration_minutes": 30,
-        "route_note": "在小区里走",
-        "behavior_notes": "见到大狗会害怕",
-        "precautions": null,
-        "handover_notes": null,
-        "location": null,
-        "fee_type": null,
-        "budget": null,
-        "care_items_item_keys_in_order": [
-          "pickup",
-          "departure",
-          "return"
-        ],
-        "questions_should_cover": []
-      },
-      "notes": "单狗档案可自动确定目标；最终创建仍需从资料或页面补齐后端必填字段。"
-    },
-    {
-      "id": "DW-02",
-      "scene": "dog_walking",
-      "kind": "source_example",
-      "user_input": "明天下午帮我遛旺财和豆豆四十分钟。",
-      "context": {
-        "pet_profile": "假设档案确认旺财和豆豆均为宠主所属的狗"
-      },
-      "expected": {
-        "service_type": "dog_walking",
-        "target_dogs": [
-          "旺财",
-          "豆豆"
-        ],
-        "service_time": "明天下午",
-        "duration_minutes": 40,
-        "route_note": null,
-        "behavior_notes": null,
-        "precautions": null,
-        "handover_notes": null,
-        "location": null,
-        "fee_type": null,
-        "budget": null,
-        "care_items_item_keys_in_order": [
-          "pickup",
-          "departure",
-          "return"
-        ],
-        "questions_should_cover": [
-          "具体服务时间范围",
-          "行为特点（可简单询问）",
-          "路线要求（可选）"
+        "reference_time": "2026-11-13T10:00:00+08:00",
+        "timezone": "Asia/Shanghai",
+        "default_location": "春和社区3栋门口",
+        "handover_notes": "宠主在3栋门口交接旺财和牵引装备",
+        "emergency_contact": "宠主 13800000000",
+        "pets": [
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "旺财",
+            "species": "dog"
+          }
         ]
       },
-      "notes": "目标已明确，不追问遛哪只；多狗草稿当前不能直接映射到后端单个 pet_id。"
+      "output": {
+        "draft": {
+          "pet_ids": ["22222222-2222-4222-8222-222222222222"],
+          "service_type": "dog_walking",
+          "fee_type": "free",
+          "window_start": "2026-11-14T19:00:00+08:00",
+          "window_end": "2026-11-14T20:00:00+08:00",
+          "expected_duration_minutes": 30,
+          "location": "春和社区3栋门口",
+          "budget": 0,
+          "handover_notes": "宠主在3栋门口交接旺财和牵引装备",
+          "emergency_contact": "宠主 13800000000",
+          "requirements": "在小区内遛狗",
+          "precautions": "旺财见到大狗会害怕，应主动避让",
+          "checklist_items": [
+            {
+              "item_key": "pickup",
+              "pet_id": "22222222-2222-4222-8222-222222222222",
+              "position": 1,
+              "content": "接到旺财并确认牵引装备",
+              "completion_condition": "完成交接并确认牵引装备可正常使用",
+              "required": true
+            },
+            {
+              "item_key": "departure",
+              "pet_id": "22222222-2222-4222-8222-222222222222",
+              "position": 2,
+              "content": "在小区内遛旺财30分钟，全程使用牵引绳并处理排泄物",
+              "completion_condition": "完成30分钟遛狗并记录出发和结束情况",
+              "required": true
+            },
+            {
+              "item_key": "return",
+              "pet_id": "22222222-2222-4222-8222-222222222222",
+              "position": 3,
+              "content": "将旺财安全送回家门口并完成交接",
+              "completion_condition": "宠物已安全送回并完成交接",
+              "required": true
+            }
+          ]
+        },
+        "questions": []
+      }
     },
     {
-      "id": "DW-03",
-      "scene": "dog_walking",
-      "kind": "rule_variant",
-      "user_input": "明天下午帮我遛狗四十分钟。",
+      "id": "EB-01",
+      "service_type": "errand_buy",
+      "user_input": "明天下午四点到五点帮年糕买一袋2千克装的猫粮，预算100元，送到社区东门，预计需要40分钟，有偿。",
       "context": {
-        "pet_profile": "假设档案中有多只狗，用户未指定本次目标"
-      },
-      "expected": {
-        "service_type": "dog_walking",
-        "target_dogs": [],
-        "service_time": "明天下午",
-        "duration_minutes": 40,
-        "route_note": null,
-        "behavior_notes": null,
-        "precautions": null,
-        "handover_notes": null,
-        "location": null,
-        "fee_type": null,
-        "budget": null,
-        "care_items_item_keys_in_order": [
-          "pickup",
-          "departure",
-          "return"
-        ],
-        "questions_should_cover": [
-          "本次遛哪只或哪几只狗",
-          "具体服务时间范围"
+        "reference_time": "2026-11-13T10:00:00+08:00",
+        "timezone": "Asia/Shanghai",
+        "handover_notes": "在社区东门当面交付",
+        "emergency_contact": "宠主 13800000000",
+        "pets": [
+          {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "年糕",
+            "species": "cat"
+          }
         ]
       },
-      "notes": "多只狗但目标未明确时必须补问，不默认全选；多狗映射问题待后端确认。"
+      "output": {
+        "draft": {
+          "pet_ids": ["11111111-1111-4111-8111-111111111111"],
+          "service_type": "errand_buy",
+          "fee_type": "paid",
+          "window_start": "2026-11-14T16:00:00+08:00",
+          "window_end": "2026-11-14T17:00:00+08:00",
+          "expected_duration_minutes": 40,
+          "location": "社区东门",
+          "budget": 100,
+          "handover_notes": "在社区东门当面交付",
+          "emergency_contact": "宠主 13800000000",
+          "requirements": null,
+          "precautions": null,
+          "checklist_items": [
+            {
+              "item_key": "purchase",
+              "pet_id": "11111111-1111-4111-8111-111111111111",
+              "position": 1,
+              "content": "购买一袋2千克装猫粮，商品总价不得超过100元",
+              "completion_condition": "完成购买并保留购买凭证",
+              "required": true,
+              "product_name": "猫粮",
+              "quantity": 1,
+              "unit": "袋"
+            },
+            {
+              "item_key": "delivery",
+              "pet_id": null,
+              "position": 2,
+              "content": "将商品送到社区东门",
+              "completion_condition": "商品已在社区东门完成交付",
+              "required": true
+            }
+          ]
+        },
+        "questions": []
+      }
     }
   ]
 }
