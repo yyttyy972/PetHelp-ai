@@ -41,6 +41,7 @@ async function fillCommon(
   await page.getByLabel("服务地点").fill("联调私密地址A-101");
   await page.getByLabel("交接方式").fill("门厅当面交接");
   await page.getByLabel("异常联系人").fill("联调联系人 13800000000");
+  await page.getByLabel("费用方式").selectOption("free");
   const content = await page.getByLabel("事项内容").all();
   const conditions = await page.getByLabel("完成条件").all();
   await page.getByLabel("适用宠物").first().selectOption({ label: petName });

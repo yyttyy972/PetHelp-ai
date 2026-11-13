@@ -8,6 +8,7 @@ import {
   validate,
   payload,
   beijing,
+  applyAiSuggestion,
   type Pet,
   type RequestRow,
   type Kind,
@@ -229,6 +230,8 @@ async function parse() {
     questions.value = [];
     aiPreview.value = "";
     if (!draft.raw_text.trim()) throw Error("请先描述需求");
+    if (saved.value)
+      throw Error("已保存草稿请直接编辑；需要重新解析时请新建空白需求");
     if (mode.value === "mock") {
       questions.value = [
         "请明确起止时间与预计时长。",
@@ -252,8 +255,12 @@ async function parse() {
     questions.value = Array.isArray(result.questions)
       ? result.questions.filter((x): x is string => typeof x === "string")
       : [];
-    notice.value =
-      "AI 返回仅供参考，自动映射仍待 C 确认；请手动核对填写，不自动覆盖草稿。";
+    const warnings = applyAiSuggestion(draft, result.draft, pets.value);
+    review.value = false;
+    consent.value = false;
+    notice.value = warnings.length
+      ? `AI 建议已填入可编辑草稿；${warnings.join("；")}`
+      : "AI 建议已填入可编辑草稿，请核对所有字段后再保存。";
   });
 }
 function check() {
@@ -467,7 +474,7 @@ function exportDraft() {
             ? "模拟模式 · 数据只在当前会话保留，刷新即清空"
             : "后端模式 · 状态以服务端为准，三类需求均已接通"
         }}
-        · AI 尚未完成契约联调
+        · AI 字段已对齐；本地后端仍为 503 留桩
       </div>
       <p role="status" aria-live="polite" class="message">
         {{ busy ? "正在处理，请稍候…" : notice }}
@@ -701,7 +708,7 @@ function exportDraft() {
                 <li v-for="q in questions">{{ q }}</li>
               </ul>
               <details v-if="aiPreview">
-                <summary>查看 AI 原始建议（尚未映射）</summary>
+                <summary>查看 AI 原始建议（已映射，可核对）</summary>
                 <pre>{{ aiPreview }}</pre>
               </details>
             </article>
@@ -751,7 +758,7 @@ function exportDraft() {
                 <b>照料项 {{ i + 1 }}</b
                 ><label
                   >适用宠物<select v-model="item.pet_id">
-                    <option :value="undefined">共同事项</option>
+                    <option :value="null">共同事项</option>
                     <option v-for="petId in draft.pet_ids" :value="petId">
                       {{ pets.find((p) => p.id === petId)?.name }}
                     </option>
@@ -790,6 +797,7 @@ function exportDraft() {
                 @click="
                   draft.checklist_items.push({
                     item_key: 'care_' + crypto.randomUUID(),
+                    pet_id: null,
                     position: draft.checklist_items.length + 1,
                     content: '',
                     completion_condition: '',
@@ -834,6 +842,7 @@ function exportDraft() {
                     (draft.budget = '0.00')
                   "
                 >
+                  <option value="" disabled>请选择费用方式</option>
                   <option value="free">无偿互助</option>
                   <option value="paid">有偿服务</option>
                 </select></label
