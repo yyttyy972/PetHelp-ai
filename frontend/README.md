@@ -18,8 +18,9 @@ CORS须允许前端实际端口，若Vite使用5174，请更新B的CORS_ORIGINS�
 代买商品预算字段未确认，真实代买提交暂被阻止，但可导出完整草稿。补充要求由用户明确填入B已有的requirements文本字段，结构化映射仍待确认。导出文件含地点和联系人，仅保存到自己的设备。
 
 ## 测试
-运行 `npm run build` 和 `npx playwright test`。默认使用已安装的Microsoft Edge；无Edge可将playwright.config.ts的channel改为chromium并执行 `npx playwright install chromium`。测试会启动或复用本项目Vite。
-测试覆盖三类模拟流程、档案编辑、修改后旧版本发布拦截及HTTP契约桩。契约桩不等于真实数据库联调。
+运行 `npm run build` 和 `npm test` 完成前端构建、模拟流程及HTTP契约桩验证。启动本地 PostgreSQL 与后端后，运行 `npm run test:real` 完成真实数据库联调。默认使用已安装的 Microsoft Edge；无 Edge 可将 playwright.config.ts 的 channel 改为 chromium，并执行 `npx playwright install chromium`。测试会启动或复用本项目 Vite。
+
+真实联调覆盖注册登录、宠物与帮手档案、可服务时间、代看与遛狗需求的创建/修改/发布、我的需求和大厅隐私。每次运行会创建带 `a_week10_` 前缀的本地测试账号及配套数据，仅用于开发数据库。
 
 ## 边界
-模拟数据仅存当前会话，刷新/切换模式会清空。后端草稿可从我的需求详情重新打开编辑。宠物列表最多载入100项。后端缺少本人帮手档案查询接口，暂仅支持提交，不承诺跨会话自动恢复。无图片上传界面、真实匹配、预约执行和结算。
+模拟数据仅存当前会话，刷新/切换模式会清空。后端草稿可从我的需求详情重新打开编辑。宠物列表最多载入100项。后端缺少本人帮手档案查询接口，暂仅支持提交，不承诺跨会话自动恢复。代买商品预算和 AI 自动映射继续等待 B、C 确认；无图片上传界面、真实匹配、预约执行和结算。
