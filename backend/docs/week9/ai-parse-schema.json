@@ -1,0 +1,31 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"PetHelp AI parse response",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["draft","questions"],
+  "properties":{
+    "draft":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["pet_ids","service_type","fee_type","window_start","window_end","expected_duration_minutes","location","budget","handover_notes","emergency_contact","requirements","precautions","raw_text","checklist_items"],
+      "properties":{
+        "pet_ids":{"type":"array","uniqueItems":true,"items":{"type":"string","format":"uuid"}},
+        "service_type":{"enum":["home_visit","dog_walking","errand_buy"]},
+        "fee_type":{"enum":["free","paid",null]},
+        "window_start":{"type":["string","null"],"format":"date-time"},
+        "window_end":{"type":["string","null"],"format":"date-time"},
+        "expected_duration_minutes":{"type":["integer","null"],"minimum":1},
+        "location":{"type":["string","null"]},
+        "budget":{"type":["number","null"],"minimum":0},
+        "handover_notes":{"type":["string","null"]},
+        "emergency_contact":{"type":["string","null"]},
+        "requirements":{"type":["string","null"]},
+        "precautions":{"type":["string","null"]},
+        "raw_text":{"type":"string","minLength":1},
+        "checklist_items":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["item_key","pet_id","position","content","completion_condition","required"],"properties":{"item_key":{"type":"string","minLength":1},"pet_id":{"type":["string","null"],"format":"uuid"},"position":{"type":"integer","minimum":1},"content":{"type":"string","minLength":1},"completion_condition":{"type":"string","minLength":1},"required":{"type":"boolean"},"product_name":{"type":["string","null"]},"quantity":{"type":["integer","null"],"minimum":1},"unit":{"type":["string","null"]}}}}
+      }
+    },
+    "questions":{"type":"array","items":{"type":"string","minLength":1}}
+  }
+}
