@@ -155,12 +155,4 @@
 4. **必要追问遗漏：3 个明确案例。** `HV-07`、`HV-09`、`EB-06`。
 5. **purchase required 字段遗漏导致 Schema 失败：2 个案例。** `EB-02`、`EB-09`。
 
-## 5. 优先修复建议
 
-1. **先修评估器，再比较模型版本。** checklist 应优先校验固定 key、顺序、pet_id、关键事实覆盖，中文内容使用规范化或语义级判断；不要要求整句或单一同义词字面命中。
-2. **为 home_visit item_key 建立受控词表。** 明确 `feed_food/change_water/clean_litter/give_medicine` 等 canonical key，并在 Prompt、Schema 或后处理校验中统一，避免 `feeding/feed_cat_food/medication/water_refill` 漂移。
-3. **强化字段归位规则。** 用短正反例明确 checklist、requirements、precautions 的边界，尤其避免把 checklist 内容重复写入 requirements。
-4. **强化 purchase 输出完整性。** 明确 `product_name`、`quantity`、`unit` 无论是否已知都必须出现；未知时输出 null 并追问，避免 Schema 直接拒绝。
-5. **完善追问主题检测。** 使用主题级规则而不是“多少”等过宽关键词；补强 handover、supplies_location 等缺失字段与 questions 的对应检查。
-6. **校准三条争议标注。** 重新确认 `HV-08` 的时长、`HV-15` 的周期需求策略，以及 `EB-03` 中 input.pet_ids 是否应作为已选择宠物传入 parser。
-7. **保留严格 Schema 关口。** 两条 Error 证明 parser 的拒绝策略有效；不应为了提高通过率放宽 required 字段。
