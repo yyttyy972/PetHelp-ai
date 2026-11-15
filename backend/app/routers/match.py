@@ -7,24 +7,24 @@ from app.config import JWT_SECRET
 
 router = APIRouter()
 
+
 @router.post("/requests/{request_id}/match")
 def match_helpers(request_id: UUID, authorization: str = Header(None)):
-    # 1. 登录鉴权 (自己解码 JWT)
-    if not authorization or not authorization.startswith("Bearer "):
+    # 1. 登录鉴权
+    if not authorization:
         raise HTTPException(status_code=401, detail="未提供认证Token")
-    
-    token_str = authorization.split(" ")[1]
+
+    # 兼容带 Bearer 前缀和不带前缀的情况
+    token = authorization.replace("Bearer ", "").strip()
     try:
-        # 使用 B 组 config 里的密钥进行解码
-        payload = jwt.decode(token_str, JWT_SECRET, algorithms=["HS256"])
-        user_id = payload.get("sub") # 获取当前登录用户的ID
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("sub")
     except Exception as e:
         raise HTTPException(status_code=401, detail="Token无效或已过期")
 
     with connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
-            
-            # 2. 查当前用户，获取他的 community_code (用于社区过滤)
+            # 2. 查当前用户，获取他的 community_code
             cur.execute('SELECT community_code FROM "User" WHERE id = %s', (user_id,))
             user = cur.fetchone()
             if not user:
@@ -34,12 +34,12 @@ def match_helpers(request_id: UUID, authorization: str = Header(None)):
             # 3. 查需求并校验状态
             cur.execute('SELECT * FROM "ServiceRequest" WHERE id = %s', (request_id,))
             req = cur.fetchone()
-            
+
             if not req:
                 raise HTTPException(status_code=404, detail="需求不存在")
             if req['status'] != 'pending_match':
                 raise HTTPException(status_code=409, detail="需求不在待匹配状态")
-            
+
             # 4. 社区过滤校验
             if req['community_code'] != user_community:
                 raise HTTPException(status_code=403, detail="无权匹配其他社区的需求")
@@ -75,7 +75,7 @@ def match_helpers(request_id: UUID, authorization: str = Header(None)):
                     SELECT 1 FROM "Availability"
                     WHERE helper_id = %s AND start_at <= %s AND end_at >= %s LIMIT 1
                 ''', (h['id'], req['window_start'], req['window_end']))
-                if not cur.fetchone(): continue 
+                if not cur.fetchone(): continue
 
                 # 时间冲突
                 cur.execute('''
@@ -83,7 +83,7 @@ def match_helpers(request_id: UUID, authorization: str = Header(None)):
                     WHERE helper_id = %s AND status NOT IN ('completed', 'cancelled')
                       AND scheduled_start < %s AND scheduled_end > %s LIMIT 1
                 ''', (h['id'], req['window_end'], req['window_start']))
-                if cur.fetchone(): continue 
+                if cur.fetchone(): continue
 
                 # --- 评分与排序 ---
                 score = 0
@@ -99,7 +99,7 @@ def match_helpers(request_id: UUID, authorization: str = Header(None)):
                     score += 30
                     reasons.append("同栋优先")
                 if h.get('experience'):
-                    score += len(h['experience']) // 10 
+                    score += len(h['experience']) // 10
                     reasons.append("经验丰富")
 
                 candidates.append({
