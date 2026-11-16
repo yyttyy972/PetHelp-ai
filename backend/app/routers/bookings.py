@@ -202,3 +202,34 @@ def cancel_request(id:UUID,body:CancelRequest,u=Depends(me),c=Depends(db)):
     r=update(c,'ServiceRequest',id,{'status':'cancelled'})
     insert(c,'TaskEvent',dict(request_id=id,booking_id=active['id'] if active else None,actor_id=u['id'],event_type='request_cancelled',operation='cancel_request',from_status=old,to_status='cancelled',request_version=r['version'],payload={'reason':body.reason}))
     return demand_view(c,r,u)
+
+
+def booking_summary(c,b):
+    r=one(c,'ServiceRequest',b['request_id'])
+    data=result(r,b)
+    data.pop('request_snapshot',None)
+    return data
+
+@router.get('/bookings')
+def list_bookings(role:Literal['owner','helper','all']='all',
+                  limit:int=Query(20,ge=1,le=100),cursor:str|None=None,
+                  u=Depends(me),c=Depends(db)):
+    owner_clause='owner_id=%s'
+    helper_clause='helper_id IN (SELECT id FROM "HelperProfile" WHERE user_id=%s)'
+    where={'owner':owner_clause,'helper':helper_clause,'all':'('+owner_clause+' OR '+helper_clause+')'}[role]
+    params=[u['id'],u['id']] if role=='all' else [u['id']]
+    rows,next_cursor=page(c,'Booking',where,params,limit,cursor)
+    return {'items':[booking_summary(c,b) for b in rows],'next_cursor':next_cursor}
+
+@router.get('/bookings/{id}')
+def booking_detail(id:UUID,u=Depends(me),c=Depends(db)):
+    b=one(c,'Booking',id)
+    h=c.execute('SELECT user_id FROM "HelperProfile" WHERE id=%s',(b['helper_id'],)).fetchone()
+    if u['id']!=b['owner_id'] and (not h or u['id']!=h['user_id']):
+        raise Error(403,'forbidden')
+    data=booking_summary(c,b)
+    # Read the booked version, never the request's latest checklist after edits.
+    data['checklist_items']=clean(c.execute(
+        'SELECT * FROM "ChecklistItem" WHERE request_id=%s AND request_version=%s AND deleted_at IS NULL ORDER BY position',
+        (b['request_id'],b['request_version'])).fetchall())
+    return data

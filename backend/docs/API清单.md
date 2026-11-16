@@ -94,3 +94,10 @@ POST /media 的 purpose 新增 evidence，格式大小限制不变，关联执�
 必需项 waived 仅接受同预约、同版本、宠主 actor_id 的 checklist_waived 事件，payload.checklist_item_id 指向该项；本周不开放批准豁免入口，后续异常模块须按此审计约定生成事件，不能仅直接修改状态。异常处理和评价本周仍未实现。之前“预约均未实现”等第10周范围描述仅为历史记录，以本节和表格状态列为准。
 
 POST /requests/{id}/cancel 已实现：仅宠主可在 draft/pending_match/pending_confirm/reserved 调用，请求 expected_version、非空 reason，成功 200 返回 R；需求直接 cancelled，关联有效预约同时 cancelled，不重新开放。版本不符或服务已开始返回409，非宠主403。confirm/verify 缺少 Idempotency-Key 返回422 validation_error，此约束由中间件强制执行，其他写操作支持按键重放。
+
+
+## 第11周预约查询补充
+- GET /api/v0/bookings：登录必需，role=owner/helper/all（默认all），limit=1..100（默认20）、cursor；200 返回 {items,next_cursor}，仅包含当前账号作为宠主或帮手参与的未软删除预约，包含 cancelled/completed 历史记录；按 UUID 升序游标分页，双角色 all 不重复。owner 指预约宠主，不区分邀请或帮手申请。
+- GET /api/v0/bookings/{id}：仅该预约宠主或帮手可读，200 返回预约字段及 request_status、checklist_items；清单按预约 request_version 查询，包含执行状态，重要修改后不会混入新版清单。
+- 两个接口均返回 id（预约编号）、request_id、request_version、owner_id、helper_id、owner_confirmed_at、helper_confirmed_at、scheduled_start/end、agreed_fee、actual_cost、settlement_status、status、reserved_until 等 Booking 字段，排除 request_snapshot 和 deleted_at；列表不带清单，详情带清单。确认时间为空表示该方未确认，预约 cancelled 时历史确认不代表仍有效；status 是预约状态，request_status 是当前需求状态。
+- 错误统一 {code,message}：未登录401 unauthorized，非参与者详情403 forbidden，不存在或已软删除详情404 not_found，非法UUID/role/limit/cursor为422 validation_error；GET 无需 Idempotency-Key。不增加数据库字段。
