@@ -12,10 +12,8 @@ from app import schemas as S
 from app.db import connection
 from app.config import COMMUNITY, JWT_SECRET, MEDIA_ROOT
 from app.core.security import hash_password, verify_password, token
-from . import match
 
-router=APIRouter(prefix="/api/v0")     
-router.include_router(match.router)    
+router=APIRouter(prefix="/api/v0")
 class Error(Exception):
     def __init__(self,status,code,message=None): self.status=status; self.code=code; self.message=message or code
 
@@ -180,7 +178,7 @@ def request_get(id:UUID,u=Depends(me),c=Depends(db)):return demand_view(c,one(c,
 @router.patch('/requests/{id}')
 def request_patch(id:UUID,body:dict,u=Depends(me),c=Depends(db)):
     r=one(c,'ServiceRequest',id,True);own(r,u)
-    if r['status'] not in ['draft','pending_match']:raise Error(409,'invalid_state')
+    if r['status'] not in ['draft','pending_match','pending_confirm','reserved']:raise Error(409,'invalid_state')
     if body.get('expected_version')!=r['version']:raise Error(409,'version_conflict')
     allowed=set(S.Demand.model_fields)-{'pet_ids','service_type'}
     if not set(body)<=allowed|{'expected_version'}:raise Error(422,'validation_error')
@@ -189,7 +187,14 @@ def request_patch(id:UUID,body:dict,u=Depends(me),c=Depends(db)):
     data['pet_ids']=[p['id'] for p in old['pets']]
     data['checklist_items']=[{k:i[k] for k in S.Item.model_fields} for i in old['checklist_items']]
     data.update({k:v for k,v in body.items() if k!='expected_version'})
-    validated=S.Demand.model_validate(data);check_pets(c,validated,u)
+    validated=S.Demand.model_validate(data)
+    if r['status'] in ['pending_confirm','reserved']:
+        from app.routers.bookings import cancel
+        active=c.execute('SELECT * FROM "Booking" WHERE request_id=%s AND status<>\'cancelled\' AND deleted_at IS NULL',(id,)).fetchone()
+        if active:
+            one(c,'HelperProfile',active['helper_id'],True)
+            r,_=cancel(c,r,active,u,'request_version_changed')
+    check_pets(c,validated,u)
     r=update(c,'ServiceRequest',id,dict(**validated.model_dump(exclude={'pet_ids','checklist_items'}),version=r['version']+1))
     checklist(c,r,validated.checklist_items);event(c,r,u,'version_changed',r['status']);return demand_view(c,r,u)
 @router.post('/requests/{id}/publish')
@@ -208,7 +213,7 @@ def ai_parse(body:dict,u=Depends(me)):raise Error(503,'ai_unavailable')
 
 @router.post('/media',status_code=201)
 def upload(file:UploadFile=File(...),purpose:str=Form(...),u=Depends(me)):
-    if purpose not in ['avatar','pet']:raise Error(422,'invalid_media')
+    if purpose not in ['avatar','pet','evidence']:raise Error(422,'invalid_media')
     data=file.file.read(5*1024*1024+1)
     if len(data)>5*1024*1024:raise Error(413,'file_too_large')
     try:
@@ -225,11 +230,15 @@ def media(relative_path:str,request:Request,c=Depends(db)):
     path=(MEDIA_ROOT/relative_path).resolve()
     if not path.is_relative_to(MEDIA_ROOT) or not path.is_file():raise Error(404,'not_found')
     parts=relative_path.split('/')
-    if len(parts)!=3 or parts[1] not in ['avatar','pet']:raise Error(404,'not_found')
+    if len(parts)!=3 or parts[1] not in ['avatar','pet','evidence']:raise Error(404,'not_found')
     url='/api/v0/media/'+relative_path
     if parts[1]=='avatar' and c.execute('SELECT 1 FROM "User" WHERE avatar_url=%s AND deleted_at IS NULL',(url,)).fetchone():return FileResponse(path,media_type='image/png')
     u=me(request,c)
     if str(u['id'])==parts[0]:return FileResponse(path,media_type='image/png')
+    if parts[1]=='evidence':
+        allowed=c.execute('SELECT 1 FROM "ExecutionRecord" e JOIN "Booking" b ON b.id=e.booking_id JOIN "HelperProfile" h ON h.id=b.helper_id WHERE %s=ANY(e.photo_urls) AND (b.owner_id=%s OR h.user_id=%s) AND e.deleted_at IS NULL',(url,u['id'],u['id'])).fetchone()
+        if not allowed:raise Error(403,'forbidden')
+        return FileResponse(path,media_type='image/png')
     rows=c.execute('SELECT r.* FROM "ServiceRequest" r JOIN "RequestPet" rp ON rp.request_id=r.id JOIN "PetProfile" p ON p.id=rp.pet_id WHERE p.photo_url=%s AND r.deleted_at IS NULL',(url,)).fetchall()
     if not any(participant(c,r,u) for r in rows):raise Error(403,'forbidden')
     return FileResponse(path,media_type='image/png')
