@@ -33,3 +33,18 @@ schema.sql 只在空库执行一次；seed.sql 使用固定 UUID 和 ON CONFLICT
 需求写入的幂等结果使用 TaskEvent 同事务保存；其他操作因12表契约没有独立幂等表，使用本地文件缓存，数据库提交与文件写入之间存在崩溃窗口；部署只支持本地单实例，不宣称分布式严格一次。上传失败重试可能遗留未绑定文件，后续需清理策略。当前路由以 Pydantic 及服务逻辑校验输入，SQL模型定义在 db/schema.sql。尚无真实支付、通知或定位。
 
 开发联调：CORS_ORIGINS 可配置逗号分隔的前端地址，默认 http://localhost:5173,http://127.0.0.1:5173；当前采用单 worker 串行事务，避免同步数据库锁阻塞事件循环，不用于高并发部署。
+
+## 第11周增量（2026-11-16）
+
+新增服务前取消需求、D 匹配模块接入、预约、双确认、撤回、开始、执行记录、提交核验及一次模拟结算；PATCH 支持 pending_confirm/reserved 重要修改失效。预约相关幂等结果现为同事务数据库事件，非需求类档案操作仍使用文件缓存。执行凭证上传 purpose=evidence，参与者受控读取。以上更新取代前文第10周“预约未实现”的历史说明，异常批准和评价仍未实现。
+
+在 backend 目录运行第11周集成测试（会在本地测试库新增测试需求，不用于生产库）：
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+.venv/Scripts/python.exe tests/week11.py
+```
+
+测试读取 DATABASE_URL，默认此前本机演示库127.0.0.1:55432/linchong，需要已导入seed；自带TestClient，无需启动HTTP服务。已有 uvicorn 进程需要重启才能加载本次路由。
+
+审计修订：match 保留 D 的服务/宠物/费用过滤及评分权重，时间改为窗口内存在足够长的连续空闲段，供 D 在草稿 PR 审核；confirm/verify 强制 Idempotency-Key（缺少返回422）。取消需求使需求和有效预约同时 cancelled，与帮手撤回后重新匹配不同；前端可接 POST /api/v0/requests/{id}/cancel，提交 expected_version、reason。

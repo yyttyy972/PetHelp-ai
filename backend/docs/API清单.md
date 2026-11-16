@@ -14,7 +14,7 @@
 
 表内字段均为必填，标记 `?` 为可选；更新只接收列出的白名单字段，字典中的系统字段不可通过通用 PATCH 写入。
 
-|方法、路径|请求字段|响应字段及来源|特有错误|第10周状态|
+|方法、路径|请求字段|响应字段及来源|特有错误|实现状态（第10/11周）|
 |---|---|---|---|---|
 |GET /health|无|`{"status":"ok"}`，不依赖数据库|503 service_unavailable（进程不可用）|已实现|
 |POST /auth/register|account,password,display_name,roles,avatar_url?,address?|U（含 avatar_url、verification_status，社区由配置赋值，核验默认 unverified）|409 account_exists|已实现|
@@ -35,16 +35,16 @@
 |GET /requests/{id}|无|按权限投影 R|404 not_found|已实现|
 |PATCH /requests/{id}|expected_version，创建字段的可选项，含 fee_type?,precautions?,raw_text?（宠物名单/service_type 不可变）|R，重要修改 version+1|409 invalid_state/version_conflict|已实现|
 |POST /requests/{id}/publish|expected_version|R|422 incomplete_request|已实现|
-|POST /requests/{id}/match|expected_version|request_id,version,candidates[{helper_id,avatar_url,verification_status,fee_pref,service_radius_m,address_tag,reasons}]，候选卡字段来源见下文，不持久化排名|503 matching_unavailable|未实现，后续周次|
-|POST /requests/{id}/bookings|expected_version,helper_id,scheduled_start,scheduled_end,agreed_fee|B；宠主邀请或 helper_id=本人申请|409 time_conflict/booking_exists|未实现，后续周次|
-|POST /bookings/{id}/confirm|expected_version|B，双方分别确认同一版本|409 reservation_expired/version_conflict|未实现，后续周次|
-|POST /bookings/{id}/withdraw|reason|B（cancelled），需求重新 pending_match|409 invalid_state|未实现，后续周次|
-|POST /requests/{id}/cancel|expected_version,reason|R（cancelled）|409 invalid_state|未实现，后续周次|
-|POST /bookings/{id}/start|expected_version|B 与 request_status|409 invalid_state/version_conflict|未实现，后续周次|
-|POST /bookings/{id}/records|checklist_item_id,kind,occurred_at,note?,photo_urls?,actual_cost?|E；更新对应清单执行状态|422 invalid_evidence|未实现，后续周次|
-|GET /bookings/{id}/records|分页|E 列表|403 forbidden|未实现，后续周次|
-|POST /bookings/{id}/submit|expected_version|B 与 request_status=pending_verify|422 checklist_incomplete|未实现，后续周次|
-|POST /bookings/{id}/verify|expected_version|B 与 request_status=completed，模拟结算结果|409 invalid_state|未实现，后续周次|
+|POST /requests/{id}/match|expected_version|request_id,version,candidates[{helper_id,avatar_url,verification_status,fee_pref,service_radius_m,address_tag,reasons}]，候选卡字段来源见下文，不持久化排名|503 matching_unavailable|已实现（第11周接入D模块）|
+|POST /requests/{id}/bookings|expected_version,helper_id,scheduled_start,scheduled_end,agreed_fee|B；宠主邀请或 helper_id=本人申请|409 time_conflict/booking_exists|第11周已实现|
+|POST /bookings/{id}/confirm|expected_version|B，双方分别确认同一版本|409 reservation_expired/version_conflict|第11周已实现|
+|POST /bookings/{id}/withdraw|reason|B（cancelled），需求重新 pending_match|409 invalid_state|第11周已实现|
+|POST /requests/{id}/cancel|expected_version,reason|R（cancelled）|409 invalid_state/version_conflict；403 forbidden|第11周已实现|
+|POST /bookings/{id}/start|expected_version|B 与 request_status|409 invalid_state/version_conflict|第11周已实现|
+|POST /bookings/{id}/records|checklist_item_id,kind,occurred_at,note?,photo_urls?,actual_cost?|E；更新对应清单执行状态|422 invalid_evidence|第11周已实现|
+|GET /bookings/{id}/records|分页|E 列表|403 forbidden|第11周已实现|
+|POST /bookings/{id}/submit|expected_version|B 与 request_status=pending_verify|422 checklist_incomplete|第11周已实现|
+|POST /bookings/{id}/verify|expected_version|B 与 request_status=completed，模拟结算结果|409 invalid_state|第11周已实现|
 |POST /bookings/{id}/exceptions|reason_code,description,proposed_change?|X 与 request_status=exception|409 invalid_state|未实现，后续周次|
 |POST /exceptions/{id}/notes|note|TaskEvent 全字段，payload.note 保存追加沟通内容|409 invalid_state|未实现，后续周次|
 |POST /exceptions/{id}/resolve|resolution,decision=resume或end,approved_change?|X 与 request_status|409 invalid_state/version_conflict|未实现，后续周次|
@@ -80,3 +80,17 @@ AI 适配器输入自然语言与上下文，输出建议字段和追问；规�
 实现补充：图片上传仅 purpose=avatar/pet，响应 201；请求字节上限5 MiB，解码限制2000万像素，重新编码 PNG，未绑定头像仅上传者可读，绑定后头像公开；非头像图片仅上传者与相关当前预约帮手可读。register 暂不接受非空 avatar_url，注册后上传并 PATCH 绑定。无有效预约的其他用户只看到大厅投影。宠物 species 在被未删除需求引用时禁止修改；角色在档案仍引用时禁止移除。幂等重放须身份仍有效，键作用域为调用者+方法+路径；请求 JSON 规范化计算哈希，multipart 按原始请求字节计算哈希。
 
 运行约束：单进程单 worker 串行处理业务请求，/health 独立；不提供高并发部署保证。CORS_ORIGINS 默认允许 localhost:5173 与 127.0.0.1:5173，可配置 A 的开发地址。DELETE /helpers/me/availability/{id} 是已实现别名；业务响应全部按统一错误格式。
+
+## 第11周增量（2026-11-16）
+
+已接入 D 的 match 路由，POST /requests/{id}/match 接收 expected_version，排除宠主本人、已删除用户和档案，统一错误格式；保留 D 原有服务类型、宠物类型、费用兼容硬过滤及排序权重；时间规则调整为单条 Availability 与需求窗口交集扣除有效预约占用后，存在连续空闲段不短于 expected_duration_minutes，不拼接多条 Availability，已过期待确认预约不占用候选时间，超时未结束的执行或异常预约仍阻止接单，核验文案仅表示“身份已核验”，不作信用保证。当前无可靠距离数据，service_radius_m 仅展示，不宣称已验证实际距离。
+
+预约、确认、撤回、开始、逐项记录、提交、核验均已实现，confirm/verify 必须携带 UUID Idempotency-Key；全部预约写请求的幂等结果写入 TaskEvent，与业务同事务提交。helper_id 始终是 HelperProfile.id，“本人申请”指该档案 user_id 为当前账号。创建预约为201，其余动作为200；records POST为201、GET为分页。预约响应为 Booking 字段加 request_status，verify 另返回 settlement_total（agreed_fee+actual_cost，空实际费用按0）。
+
+确认超时使用数据库 clock_timestamp，取消预约并重新开放需求后返回409 reservation_expired，超时清理会提交，不因错误响应回滚。重要修改允许 pending_confirm/reserved，先取消原预约并重新开放，再复制清单新版本；旧预约保留历史确认时间但状态 cancelled，因此确认失效。
+
+POST /media 的 purpose 新增 evidence，格式大小限制不变，关联执行记录后仅该预约双方可读取，上传者可读自己尚未绑定的文件。购买凭证必须是真实上传资源、actual_cost 必填且不超过预算；其余记录不接受 actual_cost。遛狗和代买分别验证前序节点及时间顺序。
+
+必需项 waived 仅接受同预约、同版本、宠主 actor_id 的 checklist_waived 事件，payload.checklist_item_id 指向该项；本周不开放批准豁免入口，后续异常模块须按此审计约定生成事件，不能仅直接修改状态。异常处理和评价本周仍未实现。之前“预约均未实现”等第10周范围描述仅为历史记录，以本节和表格状态列为准。
+
+POST /requests/{id}/cancel 已实现：仅宠主可在 draft/pending_match/pending_confirm/reserved 调用，请求 expected_version、非空 reason，成功 200 返回 R；需求直接 cancelled，关联有效预约同时 cancelled，不重新开放。版本不符或服务已开始返回409，非宠主403。confirm/verify 缺少 Idempotency-Key 返回422 validation_error，此约束由中间件强制执行，其他写操作支持按键重放。
