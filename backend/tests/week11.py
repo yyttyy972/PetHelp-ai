@@ -105,6 +105,33 @@ def run():
    assert call('POST','/requests/'+x['id']+'/cancel',token=owner,headers=ck,json={'expected_version':1,'reason':'行程取消'})==cancelled
    if active:
     with connection() as db:assert db.execute('SELECT status FROM "Booking" WHERE id=%s',(active['id'],)).fetchone()['status']=='cancelled'
+  outsider_account='query-'+uuid.uuid4().hex[:16]
+  call('POST','/auth/register',201,json={'account':outsider_account,'password':'QueryTest2026!','display_name':'query outsider','roles':['owner']})
+  outsider=call('POST','/auth/login',json={'account':outsider_account,'password':'QueryTest2026!'})['access_token']
+  call('GET','/bookings',401)
+  call('GET','/bookings/'+bid,403,outsider)
+  assert call('GET','/bookings',token=outsider)['items']==[]
+  for who,view in [(owner,'owner'),(helper,'helper')]:
+   found=[];cursor=None
+   while True:
+    params={'role':view,'limit':2}
+    if cursor:params['cursor']=cursor
+    listing=call('GET','/bookings',token=who,params=params)
+    found.extend(x['id'] for x in listing['items'])
+    cursor=listing['next_cursor']
+    if not cursor:break
+   assert bid in found and len(found)==len(set(found))
+   detail=call('GET','/bookings/'+bid,token=who)
+   assert detail['request_version']==1 and detail['status']=='completed'
+   assert detail['owner_confirmed_at'] and detail['helper_confirmed_at']
+   assert detail['checklist_items'] and 'request_snapshot' not in detail
+  historical=call('GET','/bookings/'+b['id'],token=owner)
+  assert historical['request_version']==1
+  call('GET','/bookings?cursor=bad',422,owner)
+  call('GET','/bookings?limit=0',422,owner)
+  call('GET','/bookings?role=bad',422,owner)
+  call('GET','/bookings/'+str(uuid.uuid4()),404,owner)
+  print('PASS booking-query/participants/pagination/validation')
   from app.routers.match import has_slot
   t=now.replace(hour=10,minute=0,second=0,microsecond=0)+timedelta(days=2)
   req={'window_start':t,'window_end':t+timedelta(hours=2),'expected_duration_minutes':60}
