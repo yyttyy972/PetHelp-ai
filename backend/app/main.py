@@ -18,6 +18,10 @@ from app.config import MEDIA_ROOT, JWT_SECRET
 
 app = FastAPI(title='邻宠帮', version='0.2')
 app.include_router(router)
+from app.routers.bookings import router as bookings_router
+from app.routers.match import router as match_router
+app.include_router(bookings_router)
+app.include_router(match_router)
 
 @app.get('/health')
 def health():
@@ -65,6 +69,8 @@ async def transaction(request: Request, call_next):
                 key = str(UUID(key))
             except ValueError:
                 raise Error(422, 'validation_error', 'Idempotency-Key 必须为 UUID')
+        if request.method=='POST' and request.url.path.startswith('/api/v0/bookings/') and request.url.path.rsplit('/',1)[-1] in ['confirm','verify'] and not key:
+            raise Error(422,'validation_error','Idempotency-Key required')
         actor = None
         auth = request.headers.get('authorization', '')
         if auth:
@@ -111,6 +117,10 @@ async def transaction(request: Request, call_next):
                         rid = str(UUID(request.url.path.split('/')[4]))
                     except (ValueError, IndexError):
                         pass
+                if request.url.path.startswith('/api/v0/bookings/'):
+                    bid=UUID(request.url.path.split('/')[4])
+                    ref=c.execute('SELECT request_id FROM "Booking" WHERE id=%s',(bid,)).fetchone()
+                    if ref:rid=ref['request_id']
                 if rid:
                     r = c.execute('SELECT * FROM "ServiceRequest" WHERE id=%s', (rid,)).fetchone()
                     insert(c, 'TaskEvent', dict(request_id=r['id'], actor_id=actor, event_type='idempotency_result', operation=op_hash, from_status=r['status'], to_status=r['status'], request_version=r['version'], idempotency_key=key, request_hash=digest, response_snapshot={'body': result, 'status': response.status_code}))
