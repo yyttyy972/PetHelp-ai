@@ -208,9 +208,6 @@ def request_delete(id:UUID,u=Depends(me),c=Depends(db)):
     r=one(c,'ServiceRequest',id,True);own(r,u)
     if r['status']!='draft':raise Error(409,'invalid_state')
     update(c,'ServiceRequest',id,{'deleted_at':datetime.now(timezone.utc)});event(c,r,u,'draft_deleted','draft');return Response(status_code=204)
-@router.post('/ai/parse')
-def ai_parse(body:dict,u=Depends(me)):raise Error(503,'ai_unavailable')
-
 @router.post('/media',status_code=201)
 def upload(file:UploadFile=File(...),purpose:str=Form(...),u=Depends(me)):
     if purpose not in ['avatar','pet','evidence']:raise Error(422,'invalid_media')

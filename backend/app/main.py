@@ -13,11 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
 from pydantic import ValidationError
 from app.routers.api import router, Error, insert
+from app.ai.router import router as ai_router
 from app.db import connection
 from app.config import MEDIA_ROOT, JWT_SECRET
 
 app = FastAPI(title='邻宠帮', version='0.2')
 app.include_router(router)
+app.include_router(ai_router)
 from app.routers.bookings import router as bookings_router
 from app.routers.match import router as match_router
 app.include_router(bookings_router)

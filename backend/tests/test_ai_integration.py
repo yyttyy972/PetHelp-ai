@@ -12,7 +12,7 @@ os.environ.setdefault(
 )
 
 from app.ai.parser import parse_request
-from app.ai.router import AIParseRequest, ai_parse
+from app.ai.router import AIParseRequest, ai_parse, ai_parse as ai_parse_endpoint
 from app.ai.schema import AIResponseValidationError, validate_ai_response
 from app.routers.api import Error
 
@@ -169,27 +169,50 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, 403)
         parser.assert_not_called()
 
+    @patch("app.ai.router.parse_request")
+    def test_omitted_pet_ids_defaults_to_empty_list(self, parser):
+        parser.return_value = make_draft("没有指定宠物", [])
+        body = AIParseRequest(
+            text="帮忙照看宠物",
+            reference_time="2026-11-16T12:00:00+08:00",
+            timezone="Asia/Hong_Kong",
+        )
+
+        result = ai_parse(body, {"id": uuid4()}, None)
+
+        self.assertEqual(body.pet_ids, [])
+        self.assertEqual(result["draft"]["pet_ids"], [])
+        self.assertEqual(parser.call_args.kwargs["selected_pet_ids"], [])
+
 
 class RegistrationTests(unittest.TestCase):
-    def test_replaces_only_the_placeholder(self):
-        from run_ai_integration import ai_router, app, backend_router
+    def test_formal_app_has_one_ai_route_and_health(self):
+        from app.main import app
 
-        backend_matches = [
+        def flattened(routes):
+            for route in routes:
+                nested = getattr(route, "original_router", None)
+                if nested is not None:
+                    yield from flattened(nested.routes)
+                else:
+                    yield route
+
+        matches = [
             route
-            for route in backend_router.routes
+            for route in flattened(app.routes)
             if getattr(route, "path", None) == "/api/v0/ai/parse"
             and "POST" in getattr(route, "methods", set())
         ]
-        ai_matches = [
-            route
-            for route in ai_router.routes
-            if getattr(route, "path", None) == "/api/v0/ai/parse"
-            and "POST" in getattr(route, "methods", set())
-        ]
-        self.assertEqual(backend_matches, [])
-        self.assertEqual(len(ai_matches), 1)
+        self.assertEqual(len(matches), 1)
+        self.assertIs(matches[0].endpoint, ai_parse_endpoint)
         self.assertIn("/api/v0/ai/parse", app.openapi()["paths"])
         self.assertIn("/health", app.openapi()["paths"])
+
+    def test_standalone_entry_exports_same_formal_app(self):
+        from app.main import app
+        from run_ai_integration import app as standalone_app
+
+        self.assertIs(standalone_app, app)
 
 
 if __name__ == "__main__":

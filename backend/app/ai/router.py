@@ -27,7 +27,7 @@ class AIParseRequest(BaseModel):
     text: str = Field(min_length=1, max_length=10_000)
     reference_time: AwareDatetime
     timezone: str = Field(min_length=1, max_length=100)
-    pet_ids: list[UUID]
+    pet_ids: list[UUID] = Field(default_factory=list)
 
     @field_validator("timezone")
     @classmethod
