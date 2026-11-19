@@ -1,4 +1,4 @@
-"""Isolated FastAPI route for the AI parser integration."""
+"""FastAPI routes for AI request parsing and rule-based question answering."""
 
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -12,6 +12,8 @@ from app.ai.parser import (
     AIModelResponseError,
     parse_request,
 )
+from app.ai.match_explainer import explain_match
+from app.ai.qa_service import answer_question
 from app.ai.schema import AIResponseValidationError
 from app.routers.api import Error, db, me
 
@@ -43,6 +45,37 @@ class AIParseRequest(BaseModel):
         if len(self.pet_ids) != len(set(self.pet_ids)):
             raise ValueError("duplicate pet_ids")
         return self
+
+
+class AIQARequest(BaseModel):
+    """Validated rule question; no business entity or state is accepted."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=2_000)
+
+
+class MatchCandidate(BaseModel):
+    """Candidate fields returned by the matching module."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    helper_id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    avatar_url: str | None = None
+    verification_status: str | None = None
+    fee_pref: str | None = None
+    service_radius_m: int | None = Field(default=None, ge=0)
+    address_tag: str | None = None
+    reasons: list[str]
+
+
+class AIMatchExplanationRequest(BaseModel):
+    """Validated wrapper for an existing match candidate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate: MatchCandidate
 
 
 PET_PROFILE_FIELDS = (
@@ -99,3 +132,15 @@ def ai_parse(body: AIParseRequest, user=Depends(me), connection=Depends(db)):
         raise Error(502, "ai_invalid_response") from exc
 
     return {"draft": result["draft"], "questions": result["questions"]}
+
+
+@router.post("/ai/qa")
+def ai_qa(body: AIQARequest):
+    """Answer from business rules only; this route has no database dependency."""
+    return answer_question(body.question)
+
+
+@router.post("/ai/explain-match")
+def ai_explain_match(body: AIMatchExplanationRequest):
+    """Explain existing match reasons without recalculating or writing state."""
+    return explain_match(body.candidate.model_dump())
