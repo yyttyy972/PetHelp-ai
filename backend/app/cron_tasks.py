@@ -22,7 +22,7 @@ def check_timeouts():
                 JOIN "ServiceRequest" r ON b.request_id = r.id
                 JOIN "HelperProfile" h ON b.helper_id = h.id
                 WHERE b.status = 'in_service' 
-                  AND b.scheduled_end <= %s
+                  AND b.scheduled_end <= NOW() + interval '10 seconds'
                 FOR UPDATE OF r, h, b
             ''', (now_utc,))
             timeout_bookings = cur.fetchall()
