@@ -45,11 +45,11 @@
 |GET /bookings/{id}/records|分页|E 列表|403 forbidden|第11周已实现|
 |POST /bookings/{id}/submit|expected_version|B 与 request_status=pending_verify|422 checklist_incomplete|第11周已实现|
 |POST /bookings/{id}/verify|expected_version|B 与 request_status=completed，模拟结算结果|409 invalid_state|第11周已实现|
-|POST /bookings/{id}/exceptions|reason_code,description,proposed_change?|X 与 request_status=exception|409 invalid_state|未实现，后续周次|
-|POST /exceptions/{id}/notes|note|TaskEvent 全字段，payload.note 保存追加沟通内容|409 invalid_state|未实现，后续周次|
-|POST /exceptions/{id}/resolve|resolution,decision=resume或end,approved_change?|X 与 request_status|409 invalid_state/version_conflict|未实现，后续周次|
+|POST /bookings/{id}/exceptions|expected_version,reason_code,description,proposed_change?|X 与 request_status=exception|409 invalid_state|第12周已实现|
+|POST /exceptions/{id}/notes|note|TaskEvent 全字段，payload.note 保存追加沟通内容|409 invalid_state|第12周已实现|
+|POST /exceptions/{id}/resolve|expected_version,resolution,decision=resume或end,approved_change?|X 与 request_status|409 invalid_state/version_conflict|第12周已实现|
 |POST /bookings/{id}/reviews|rating,comment?|Review 字段（不含 deleted_at），双方由预约推导|409 already_reviewed|未实现，后续周次|
-|GET /requests/{id}/events|分页|TaskEvent 全字段|403 forbidden|未实现，后续周次|
+|GET /requests/{id}/events|分页|TaskEvent 全字段|403 forbidden|第12周已实现|
 |POST /media|multipart file，purpose=avatar或pet|{url}，本地 /api/v0/media/ 相对 URL；JPEG/PNG/WebP，最大5 MiB，校验实际解码类型|413 file_too_large；422 invalid_media|已实现|
 |DELETE /requests/{id}|无|仅 draft，204 软删除，已发布拒绝|409 invalid_state|已实现|
 |GET /media/{relative_path}|无|二进制文件：头像可公开，宠物照片按宠主与当前预约帮手授权，执行凭证按关联预约参与者授权；第10周受控读取|404 not_found|已实现|
@@ -101,3 +101,6 @@ POST /requests/{id}/cancel 已实现：仅宠主可在 draft/pending_match/pendi
 - GET /api/v0/bookings/{id}：仅该预约宠主或帮手可读，200 返回预约字段及 request_status、checklist_items；清单按预约 request_version 查询，包含执行状态，重要修改后不会混入新版清单。
 - 两个接口均返回 id（预约编号）、request_id、request_version、owner_id、helper_id、owner_confirmed_at、helper_confirmed_at、scheduled_start/end、agreed_fee、actual_cost、settlement_status、status、reserved_until 等 Booking 字段，排除 request_snapshot 和 deleted_at；列表不带清单，详情带清单。确认时间为空表示该方未确认，预约 cancelled 时历史确认不代表仍有效；status 是预约状态，request_status 是当前需求状态。
 - 错误统一 {code,message}：未登录401 unauthorized，非参与者详情403 forbidden，不存在或已软删除详情404 not_found，非法UUID/role/limit/cursor为422 validation_error；GET 无需 Idempotency-Key。不增加数据库字段。
+
+
+第12周新增 GET /bookings/{id}/exceptions，双方可分页查询异常；白名单变更、错误码、异常 confirm 和事件投影详见 [第12周接口与验收](第12周接口与验收.md)，取代前文异常/豁免未实现的历史说明，评价仍未实现。

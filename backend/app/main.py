@@ -23,6 +23,8 @@ app.include_router(ai_router)
 from app.routers.bookings import router as bookings_router
 from app.routers.match import router as match_router
 app.include_router(bookings_router)
+from app.routers.exceptions import router as exceptions_router
+app.include_router(exceptions_router)
 app.include_router(match_router)
 
 @app.get('/health')
@@ -123,6 +125,10 @@ async def transaction(request: Request, call_next):
                     bid=UUID(request.url.path.split('/')[4])
                     ref=c.execute('SELECT request_id FROM "Booking" WHERE id=%s',(bid,)).fetchone()
                     if ref:rid=ref['request_id']
+                if request.url.path.startswith('/api/v0/exceptions/'):
+                    xid=UUID(request.url.path.split('/')[4])
+                    ref=c.execute('SELECT b.request_id FROM "ExceptionRecord" x JOIN "Booking" b ON b.id=x.booking_id WHERE x.id=%s',(xid,)).fetchone()
+                    if ref:rid=ref['request_id']
                 if rid:
                     r = c.execute('SELECT * FROM "ServiceRequest" WHERE id=%s', (rid,)).fetchone()
                     insert(c, 'TaskEvent', dict(request_id=r['id'], actor_id=actor, event_type='idempotency_result', operation=op_hash, from_status=r['status'], to_status=r['status'], request_version=r['version'], idempotency_key=key, request_hash=digest, response_snapshot={'body': result, 'status': response.status_code}))
@@ -160,3 +166,4 @@ app.add_middleware(
     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allow_headers=['Authorization', 'Content-Type', 'Idempotency-Key'],
 )
+
