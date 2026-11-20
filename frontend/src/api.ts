@@ -111,6 +111,26 @@ export class Api {
       reason,
     });
   }
+  cancelRequest(id: string, version: number, reason: string) {
+    return this.call<RequestRow>(
+      `/requests/${encodeURIComponent(id)}/cancel`,
+      "POST",
+      { expected_version: version, reason },
+    );
+  }
+  helper(id: string) {
+    return this.call<{
+      id: string;
+      service_types: string[];
+      service_area: string;
+      experience: string;
+      supported_species: string[];
+      service_radius_m: number;
+      fee_pref?: "free" | "paid" | "both" | null;
+      verification_status?: "unverified" | "verified" | null;
+      address_tag?: string | null;
+    }>(`/helpers/${encodeURIComponent(id)}`);
+  }
   bookingRecords(id: string, cursor?: string) {
     return this.call(
       `/bookings/${encodeURIComponent(id)}/records?limit=100${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`,

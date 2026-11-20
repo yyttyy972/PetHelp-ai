@@ -5,9 +5,14 @@ test("真实双账号浏览器：异常沟通、变更批准与重新确认", as
 }) => {
   test.setTimeout(60000);
   const base = "http://127.0.0.1:8000/api/v0";
-  async function call(path: string, token: string, body?: unknown) {
+  async function call(
+    path: string,
+    token: string,
+    body?: unknown,
+    method?: string,
+  ) {
     const response = await request.fetch(base + path, {
-      method: body ? "POST" : "GET",
+      method: method || (body ? "POST" : "GET"),
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Idempotency-Key": crypto.randomUUID(),
@@ -20,11 +25,32 @@ test("真实双账号浏览器：异常沟通、变更批准与重新确认", as
   const login = async (account: string) =>
     (await call("/auth/login", "", { account, password: "NeighborPet2026!" }))
       .access_token;
+  const helperAccount = `exception_${Date.now().toString(36)}`;
+  await call("/auth/register", "", {
+    account: helperAccount,
+    password: "NeighborPet2026!",
+    display_name: "异常联调帮手",
+    roles: ["helper"],
+  });
   const owner = await login("xiaolin"),
-    helper = await login("jianguo"),
+    helper = await login(helperAccount),
     now = Date.now(),
-    slot = 10 * 86400000 + Math.floor(Math.random() * 100000) * 60000,
+    slot = 10 * 86400000,
     iso = (n: number) => new Date(now + n).toISOString();
+  const helperProfile = await call(
+    "/helpers/me",
+    helper,
+    {
+      service_types: ["home_visit"],
+      service_area: "邻宠社区",
+      experience: "异常流程自动化测试",
+      supported_species: ["dog"],
+      service_radius_m: 1000,
+      fee_pref: "both",
+      address_tag: "测试楼栋",
+    },
+    "PUT",
+  );
   const pet = await call("/pets", owner, {
     name: "异常流程测试犬",
     species: "dog",
@@ -58,7 +84,7 @@ test("真实双账号浏览器：异常沟通、变更批准与重新确认", as
   await call(`/requests/${demand.id}/publish`, owner, { expected_version: 1 });
   const booking = await call(`/requests/${demand.id}/bookings`, owner, {
     expected_version: 1,
-    helper_id: "00000000-0000-4000-8000-000000000012",
+    helper_id: helperProfile.id,
     scheduled_start: iso(slot),
     scheduled_end: iso(slot + 1800000),
     agreed_fee: "0.00",
@@ -90,7 +116,7 @@ test("真实双账号浏览器：异常沟通、变更批准与重新确认", as
   }
   try {
     await open(ownerPage, "xiaolin");
-    await open(helperPage, "jianguo");
+    await open(helperPage, helperAccount);
     await helperPage.getByLabel("异常类型").selectOption("out_of_stock");
     await helperPage
       .getByLabel("异常情况说明")

@@ -477,7 +477,7 @@ function exportDraft() {
             ? "模拟模式 · 数据只在当前会话保留，刷新即清空"
             : "后端模式 · 状态以服务端为准，三类需求均已接通"
         }}
-        · AI 字段已对齐；本地后端仍为 503 留桩
+        · AI 字段已对齐；真实解析能力取决于后端模型配置
       </div>
       <p role="status" aria-live="polite" class="message">
         {{ busy ? "正在处理，请稍候…" : notice }}
@@ -947,7 +947,9 @@ function exportDraft() {
             </p>
           </article>
         </section>
-        <template v-else-if="page === '预约与执行'"><Week11 v-if="mode === 'mock'" /><BookingLive v-else :api="api" /></template>
+        <template v-else-if="page === '预约与执行'"
+          ><Week11 v-if="mode === 'mock'" /><BookingLive v-else :api="api"
+        /></template>
         <section v-else>
           <h1>{{ page }}</h1>
           <div class="actions">

@@ -13,6 +13,7 @@ const requestId = ref(""),
 const candidates = ref<
     { helper_id: string; display_name: string; reasons: string[] }[]
   >([]),
+  helperDetails = ref<Record<string, Awaited<ReturnType<Api["helper"]>>>>({}),
   helperId = ref(""),
   start = ref(""),
   end = ref(""),
@@ -24,6 +25,7 @@ const booking = ref<Record<string, unknown> | null>(null),
   photos = ref<string[]>([]),
   cost = ref(0),
   reason = ref(""),
+  cancelReason = ref(""),
   picture = ref("");
 onUnmounted(() => {
   if (picture.value) URL.revokeObjectURL(picture.value);
@@ -68,6 +70,7 @@ watch(requestId, () => {
   bookingId.value = "";
   records.value = [];
   candidates.value = [];
+  helperDetails.value = {};
   consent.value = false;
   photos.value = [];
   note.value = "";
@@ -117,6 +120,25 @@ async function match() {
   candidates.value = data.candidates;
   if (!data.candidates.length)
     message.value = "暂无匹配邻居，请调整时间或稍后重试。";
+}
+async function loadHelper(id: string) {
+  if (helperDetails.value[id]) {
+    delete helperDetails.value[id];
+    return;
+  }
+  helperDetails.value[id] = await props.api.helper(id);
+}
+async function cancelDemand() {
+  if (!request.value || !cancelReason.value.trim()) return;
+  request.value = await props.api.cancelRequest(
+    request.value.id,
+    request.value.version,
+    cancelReason.value.trim(),
+  );
+  booking.value = null;
+  candidates.value = [];
+  cancelReason.value = "";
+  message.value = "需求已取消；关联的有效预约也已同步取消。";
 }
 async function reserve() {
   if (!request.value || !consent.value) return;
@@ -168,22 +190,44 @@ async function history() {
   records.value = all;
 }
 async function upload(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
   if (!file) return;
   await run(async () => {
     if (file.size > 5 * 1024 * 1024) throw Error("照片不能超过 5 MB");
+    if (
+      !(["image/jpeg", "image/png", "image/webp"] as string[]).includes(
+        file.type,
+      )
+    )
+      throw Error("仅支持 JPG、PNG 或 WebP 图片");
     const body = new FormData();
     body.append("file", file);
     body.append("purpose", "evidence");
-    const response = await fetch(props.api.base + "/media", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${props.api.token}` },
-      body,
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw Error(`照片上传失败（${response.status}）`);
-    photos.value.push((await response.json()).url);
+    let response: Response;
+    try {
+      response = await fetch(props.api.base + "/media", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${props.api.token}` },
+        body,
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (error) {
+      throw Error(
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? "照片上传超时，请检查网络后重试"
+          : "照片上传失败，请检查网络后重试",
+      );
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw Error(data?.message || `照片上传失败（${response.status}）`);
+    }
+    const data = await response.json().catch(() => null);
+    if (!data?.url) throw Error("上传服务返回了无效数据，请重试");
+    photos.value.push(data.url);
   });
+  input.value = "";
 }
 async function record(item: unknown) {
   const i = item as { id?: string; item_key: string };
@@ -268,18 +312,64 @@ async function view(url: unknown) {
           </li>
         </ul>
         <button v-if="request.status === 'pending_match'" @click="run(match)">
-          查找推荐邻居</button
-        ><label
-          v-for="candidate in candidates"
-          :key="candidate.helper_id"
-          class="inline"
-          ><input
-            type="radio"
-            v-model="helperId"
-            :value="candidate.helper_id"
-          />{{ candidate.display_name }} ·
-          {{ candidate.reasons.join("、") }}</label
-        ><template v-if="candidates.length"
+          查找推荐邻居
+        </button>
+        <article v-for="candidate in candidates" :key="candidate.helper_id">
+          <label class="inline"
+            ><input
+              type="radio"
+              v-model="helperId"
+              :value="candidate.helper_id"
+            />{{ candidate.display_name }} ·
+            {{ candidate.reasons.join("、") }}</label
+          >
+          <button
+            type="button"
+            @click="run(() => loadHelper(candidate.helper_id))"
+          >
+            {{
+              helperDetails[candidate.helper_id]
+                ? "收起帮手详情"
+                : "查看帮手详情"
+            }}
+          </button>
+          <dl v-if="helperDetails[candidate.helper_id]" class="helper-detail">
+            <dt>服务区域</dt>
+            <dd>{{ helperDetails[candidate.helper_id].service_area }}</dd>
+            <dt>公开地点</dt>
+            <dd>
+              {{ helperDetails[candidate.helper_id].address_tag || "未填写" }}
+            </dd>
+            <dt>服务半径</dt>
+            <dd>
+              {{ helperDetails[candidate.helper_id].service_radius_m }} 米
+            </dd>
+            <dt>支持服务</dt>
+            <dd>
+              {{ helperDetails[candidate.helper_id].service_types.join("、") }}
+            </dd>
+            <dt>支持宠物</dt>
+            <dd>
+              {{
+                helperDetails[candidate.helper_id].supported_species.join("、")
+              }}
+            </dd>
+            <dt>费用偏好</dt>
+            <dd>
+              {{ helperDetails[candidate.helper_id].fee_pref || "未填写" }}
+            </dd>
+            <dt>身份状态</dt>
+            <dd>
+              {{
+                helperDetails[candidate.helper_id].verification_status ||
+                "未核验"
+              }}
+            </dd>
+            <dt>经验自述</dt>
+            <dd>{{ helperDetails[candidate.helper_id].experience }}</dd>
+          </dl>
+        </article>
+        <template v-if="candidates.length"
           ><label
             >预约开始（北京时间）<input
               type="datetime-local"
@@ -379,6 +469,25 @@ async function view(url: unknown) {
         :checklist="(request.checklist_items || []) as any"
         @changed="run(() => openBooking(bookingId))"
       />
+      <details>
+        <summary>取消整个需求</summary>
+        <p class="hint">
+          仅宠主可取消草稿、待匹配、待确认或已预约的需求；关联预约会同步取消。
+        </p>
+        <label>取消原因<input v-model="cancelReason" /></label
+        ><button
+          :disabled="
+            !cancelReason.trim() ||
+            !request ||
+            !['draft', 'pending_match', 'pending_confirm', 'reserved'].includes(
+              request.status,
+            )
+          "
+          @click="run(cancelDemand)"
+        >
+          确认取消需求
+        </button>
+      </details>
       <details>
         <summary>撤回预约</summary>
         <label>撤回原因<input v-model="reason" /></label
