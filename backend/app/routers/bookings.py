@@ -60,7 +60,7 @@ def version(r,b,v):
 def result(r,b):
     return {**clean(b),'request_status':r['status']}
 
-def eligible(c,r,h,start,end,fee):
+def eligible(c,r,h,start,end,fee,exclude_booking_id=None):
     owner=one(c,'User',r['owner_id']); user=one(c,'User',h['user_id'])
     role(owner,'owner');role(user,'helper')
     if user['id']==owner['id'] or user['community_code']!=r['community_code']:raise Error(403,'forbidden')
@@ -70,10 +70,10 @@ def eligible(c,r,h,start,end,fee):
     if (r['fee_type']=='free' and fee!=0) or (r['fee_type']=='paid' and fee<=0) or (r['service_type']!='errand_buy' and fee>r['budget']):raise Error(422,'invalid_request')
     if not r['window_start']<=start<end<=r['window_end'] or (end-start).total_seconds()<r['expected_duration_minutes']*60 or end<=now(c):raise Error(422,'invalid_window')
     if not c.execute('SELECT 1 FROM "Availability" WHERE helper_id=%s AND deleted_at IS NULL AND start_at<=%s AND end_at>=%s',(h['id'],start,end)).fetchone():raise Error(409,'time_conflict')
-    if c.execute('''SELECT 1 FROM "Booking" WHERE helper_id=%s AND deleted_at IS NULL
+    if c.execute('''SELECT 1 FROM "Booking" WHERE helper_id=%s AND deleted_at IS NULL AND (%s::uuid IS NULL OR id<>%s::uuid)
         AND status NOT IN ('completed','cancelled')
         AND (status<>'pending_confirm' OR reserved_until>clock_timestamp())
-        AND ((scheduled_start<%s AND scheduled_end>%s) OR (status IN ('in_service','exception') AND scheduled_end<clock_timestamp()))''',(h['id'],end,start)).fetchone():raise Error(409,'time_conflict')
+        AND ((scheduled_start<%s AND scheduled_end>%s) OR (status IN ('in_service','exception') AND scheduled_end<clock_timestamp()))''',(h['id'],exclude_booking_id,exclude_booking_id,end,start)).fetchone():raise Error(409,'time_conflict')
 
 @router.post('/requests/{id}/bookings',status_code=201)
 def create(id:UUID,body:BookingInput,u=Depends(me),c=Depends(db)):
@@ -97,6 +97,9 @@ def create(id:UUID,body:BookingInput,u=Depends(me),c=Depends(db)):
 @router.post('/bookings/{id}/confirm')
 def confirm(id:UUID,body:Publish,u=Depends(me),c=Depends(db)):
     r,b,h=locked(c,id,u)
+    if b['status']=='exception':
+        from app.routers.exceptions import confirm_change
+        return confirm_change(c,r,b,h,u,body.expected_version)
     if b['status']=='pending_confirm' and b['reserved_until']<=now(c):
         r,b=cancel(c,r,b,u,'confirmation_timeout')
         c.commit()  # Persist expiry even though this confirmation is rejected.
@@ -233,3 +236,4 @@ def booking_detail(id:UUID,u=Depends(me),c=Depends(db)):
         'SELECT * FROM "ChecklistItem" WHERE request_id=%s AND request_version=%s AND deleted_at IS NULL ORDER BY position',
         (b['request_id'],b['request_version'])).fetchall())
     return data
+

@@ -48,3 +48,7 @@ $env:PYTHONPATH = (Get-Location).Path
 测试读取 DATABASE_URL，默认此前本机演示库127.0.0.1:55432/linchong，需要已导入seed；自带TestClient，无需启动HTTP服务。已有 uvicorn 进程需要重启才能加载本次路由。
 
 审计修订：match 保留 D 的服务/宠物/费用过滤及评分权重，时间改为窗口内存在足够长的连续空闲段，供 D 在草稿 PR 审核；confirm/verify 强制 Idempotency-Key（缺少返回422）。取消需求使需求和有效预约同时 cancelled，与帮手撤回后重新匹配不同；前端可接 POST /api/v0/requests/{id}/cancel，提交 expected_version、reason。
+
+
+
+第12周已实现异常上报、沟通、恢复与终止、重要变更批准及帮手重确认、提醒事件查询；保持原有状态枚举，无需迁移数据库。参数、D 的扫描对接约定及测试命令见 docs/第12周接口与验收.md（状态文档同目录）。完整应用需同时安装 requirements.txt 和 requirements-ai.txt，运行 tests/week11.py、tests/week12.py；测试只使用本地测试库。
