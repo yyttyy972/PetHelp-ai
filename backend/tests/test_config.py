@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import time
 
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "app" / "config.py"
@@ -110,7 +111,7 @@ class JWTSecretConfigTests(unittest.TestCase):
 
         self.assertTrue(all(process.returncode == 0 for process in processes), results)
         self.assertEqual(results[0][0].strip(), results[1][0].strip())
-        self.assertFalse(self.secret_path.with_name("jwt_secret.lock").exists())
+        self.assertTrue(self.secret_path.with_name("jwt_secret.lock").exists())
         self.assertFalse(self.secret_path.with_name("jwt_secret.tmp").exists())
 
     def test_explicit_environment_secret_has_priority(self):
@@ -135,6 +136,44 @@ class JWTSecretConfigTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("explicitly configured in production", result.stderr)
+        self.assertFalse(self.secret_path.exists())
+
+    def test_killed_initializer_can_restart(self):
+        # Pause after writing the temp file, while holding the real OS lock.
+        marker = self.backend_root / "locked"
+        code = (
+            "import os,time; from pathlib import Path; "
+            "original=os.fsync; "
+            "exec('def pause(fd):\\n original(fd)\\n Path(\"locked\").touch()\\n time.sleep(60)'); "
+            "os.fsync=pause; import app.config"
+        )
+        process = subprocess.Popen([sys.executable, "-c", code],
+            cwd=self.backend_root, env=self.environment,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            deadline = time.monotonic() + 5
+            while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue(marker.exists(), "initializer did not acquire lock")
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=5)
+        first = self.secret_digest()
+        self.assertEqual(first, self.secret_digest())
+        self.assertFalse(self.secret_path.with_name("jwt_secret.tmp").exists())
+
+    def test_legacy_stale_lock_and_partial_temp_recover(self):
+        self.secret_path.parent.mkdir(parents=True)
+        self.secret_path.write_text("")
+        self.secret_path.with_name("jwt_secret.lock").touch()
+        self.secret_path.with_name("jwt_secret.tmp").write_text("partial")
+        self.assertEqual(self.secret_digest(), self.secret_digest())
+
+    def test_short_environment_secret_rejected(self):
+        environment = dict(self.environment, JWT_SECRET="short")
+        result = self.run_config("import app.config", environment=environment)
+        self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.secret_path.exists())
 
 
