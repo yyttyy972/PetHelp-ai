@@ -5,3 +5,4 @@ PyJWT==2.15.1
 python-multipart==0.0.33
 Pillow==13.0.0
 httpx==0.28.1
+APScheduler==3.10.4
