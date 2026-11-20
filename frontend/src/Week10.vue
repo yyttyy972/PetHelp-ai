@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, toRaw } from "vue";
 import { Api, ApiError } from "./api";
+import Week11 from "./Week11.vue";
+import BookingLive from "./BookingLive.vue";
 import {
   blank,
   fixedItems,
@@ -449,6 +451,7 @@ function exportDraft() {
           v-for="tab in [
             '发布需求',
             '社区大厅',
+            '预约与执行',
             '我的需求',
             '基础档案',
             '连接设置',
@@ -944,6 +947,7 @@ function exportDraft() {
             </p>
           </article>
         </section>
+        <template v-else-if="page === '预约与执行'"><Week11 v-if="mode === 'mock'" /><BookingLive v-else :api="api" /></template>
         <section v-else>
           <h1>{{ page }}</h1>
           <div class="actions">
