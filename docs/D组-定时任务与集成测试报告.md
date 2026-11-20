@@ -1,4 +1,4 @@
-# D组 第12周 系统测试报告
+<img width="1797" height="445" alt="image" src="https://github.com/user-attachments/assets/0c8418ec-ba07-4313-9aca-15b14bacf731" /># D组 第12周 系统测试报告
 
 ## 1. 定时超时检查程序
 - **功能说明**：系统后台每隔 1 分钟自动扫描数据库，发现“帮手预约超时未开始”的订单，自动将其状态改为取消，并释放相应需求。
@@ -12,3 +12,9 @@
 
 *(第二张图：成功拦截超时订单)*
 <img width="428" height="148" alt="image" src="https://github.com/user-attachments/assets/32553772-6e69-481c-bf8b-43679d08d6fe" />
+
+
+## 2. 对接 B 组异常处理模块（PR #7）
+- **对接说明**：已按照 B 组要求，将 `cron_tasks.py` 的定时扫描逻辑与 `report_exception` 事务函数对接。扫描时会按规范持锁（需求→帮手→预约），触发系统异常上报（`u=None`），并生成提醒事件。
+- **验证结果**：重新构造超时测试数据后，定时任务成功捕获并调用了异常上报函数，系统状态流转正常。
+<img width="988" height="211" alt="image" src="https://github.com/user-attachments/assets/9573579d-6970-4af2-a2a5-dcb0ec4d0e63" />
