@@ -462,7 +462,6 @@ function exportDraft() {
           {{ tab }}
         </button>
       </nav>
-      <p class="aside-note">每一份托付<br />从清晰开始</p>
     </aside>
     <main>
       <header>
@@ -678,7 +677,7 @@ function exportDraft() {
           <div class="heading">
             <div>
               <p class="eyebrow">A LITTLE HELP, A LOT OF CARE</p>
-              <h1>把需要的照料，说清楚</h1>
+              <h1>给毛孩子找个临时搭子</h1>
               <p>填写 → 检查清单 → 保存草稿 → 确认发布</p>
             </div>
           </div>
