@@ -167,3 +167,9 @@ app.add_middleware(
     allow_headers=['Authorization', 'Content-Type', 'Idempotency-Key'],
 )
 
+from app.cron_tasks import start_scheduler
+
+@app.on_event("startup")
+def startup_event():
+    start_scheduler()
+    print("⏰ 定时任务调度器已成功挂载到主程序。")
