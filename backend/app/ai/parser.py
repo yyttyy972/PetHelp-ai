@@ -10,7 +10,7 @@ from .config import load_ai_config
 from .schema import validate_ai_response
 
 
-PROMPT_PATH = Path(__file__).resolve().parent / "prompt-v2.md"
+PROMPT_PATH = Path(__file__).resolve().parent / "prompt-v3.md"
 
 
 class AIConfigurationError(RuntimeError):
