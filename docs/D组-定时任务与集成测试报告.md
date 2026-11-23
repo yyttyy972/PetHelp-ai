@@ -24,14 +24,12 @@
 - **对接说明**：已将 `cron_tasks.py` 的定时扫描逻辑严格修改为 `in_service` 且 `scheduled_end <= 当前时间`，并在调用 B 组 `report_exception` 时传入了完整的 Booking 数据。
 - **验证结果**：定时任务成功捕获超时订单并执行状态变更，控制台打印“成功拦截并记录异常”。数据库 `ExceptionRecord` 表已成功生成对应记录。
 
-<img width="530" height="85" alt="image" src="https://github.com/user-attachments/assets/e8800ffb-e1e1-4197-b2c9-21017c844a52" />
-
-<img width="785" height="466" alt="image" src="https://github.com/user-attachments/assets/3976ea9c-87e0-473c-8dac-87462556a926" />
+## 4. 最终自动化与幂等断言测试（全部通过）
+已彻底修复 SQL 参数及 Emoji 编码问题，补全了完整的 `ExceptionRecord` 及 `exception_reminder` 事件生成逻辑，并改用严格的 `assert` 断言。
+- **验证结果**：异常记录与提醒事件均成功生成（各 1 条）。
+- **幂等测试**：重复扫描未产生重复数据，退出码为 0。
 
 - <img width="1023" height="269" alt="image" src="https://github.com/user-attachments/assets/fb09ad81-c313-4809-b3e0-8c19ca2ffee5" />
 
 
-### 异常提醒事件验证
-为验证提醒事件生成，查询数据库 `TaskEvent` 表，确认系统已成功写入 `exception_reminder` 事件。查询结果见截图：
-<img width="563" height="425" alt="image" src="https://github.com/user-attachments/assets/3ecf2d64-6897-405c-af4c-c42af7c42943" />
 
