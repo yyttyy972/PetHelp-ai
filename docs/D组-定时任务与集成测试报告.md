@@ -27,3 +27,8 @@
 <img width="530" height="85" alt="image" src="https://github.com/user-attachments/assets/e8800ffb-e1e1-4197-b2c9-21017c844a52" />
 
 <img width="785" height="466" alt="image" src="https://github.com/user-attachments/assets/3976ea9c-87e0-473c-8dac-87462556a926" />
+
+## 补充自动化测试与幂等验证结果：
+编写了 `test_timeout_auto.py` 自动化测试脚本，实测定时任务成功捕获超时订单并生成 `ExceptionRecord`。随后进行了二次扫描的幂等测试，确认不会产生重复的异常记录。测试结果见截图。
+
+<img width="1021" height="288" alt="image" src="https://github.com/user-attachments/assets/8b495b5a-da97-431a-bc73-010f63a28a90" />
