@@ -16,57 +16,33 @@
 1. 打开终端，进入后端目录：
    ```bash
    cd backend
+安装后端依赖包：
 
-2. 安装后端依赖包
-```bash
+bash
 pip install -r requirements.txt
-```
+配置环境变量：打开 backend/app/config.py，将 DATABASE_URL 中的密码改为本地数据库密码。
 
-3. 配置环境变量
-打开 `backend/app/config.py`，将 `DATABASE_URL` 中的密码修改为本地数据库密码。
-4. 启动后端服务
+启动后端服务：
 
-```
+bash
 uvicorn app.main:app --reload
-```
-
-5. 健康检查验证
-终端输出 `Application startup complete.` 以及定时任务启动日志代表启动成功。
-访问：[http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
-返回 `{"status":"ok"}` 即后端正常。
-
----
+健康检查验证：终端打印 Application startup complete. 及定时任务启动日志即表示成功。可访问 http://127.0.0.1:8000/health 验证，返回 {"status":"ok"} 则正常。
 
 ## 4. 前端启动
+新开一个终端，进入前端目录：
 
-新开终端，进入前端目录：
-
-```
+bash
 cd frontend
-```
-
 安装前端依赖：
 
-```
+bash
 npm install
-```
-
 启动前端服务：
 
-```
+bash
 npm run dev
-```
+验证：浏览器打开 http://localhost:5173 能看到登录页面即成功。
 
-验证：浏览器访问 [http://localhost:5173](http://localhost:5173)，出现登录页面即为成功。
-
-
-
-
-
-
-
-> 
-> 验证：浏览器打开 [http://localhost:5173](http://localhost:5173) 看到登录页面即为成功。
 ## 5. 部署验证结果
 经实际测试，在全新环境下按照上述步骤安装依赖并配置 `config.py` 后，后端服务成功启动。终端打印 `Application startup complete.` 且定时任务调度器正常挂载，无任何报错。
 <img width="593" height="269" alt="image" src="https://github.com/user-attachments/assets/c2f5b5d0-9e8a-4313-93a5-8638e00fa1ab" />
