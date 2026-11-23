@@ -73,6 +73,57 @@ class ParserTests(unittest.TestCase):
             "messages"
         ][1]["content"]
         self.assertEqual(json.loads(user_message)["selected_pet_ids"], selected)
+        self.assertEqual(
+            openai.return_value.chat.completions.create.call_args.kwargs["temperature"],
+            0,
+        )
+
+    @patch("app.ai.parser.load_ai_config")
+    @patch("app.ai.parser.OpenAI")
+    def test_retries_once_after_schema_validation_failure(self, openai, config):
+        selected = [str(uuid4())]
+        config.return_value = SimpleNamespace(
+            api_key="offline-key",
+            base_url="https://example.invalid",
+            model="test-model",
+            timeout=1,
+        )
+        invalid = make_draft()
+        invalid.pop("questions")
+        valid = make_draft()
+        openai.return_value.chat.completions.create.side_effect = [
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        message=SimpleNamespace(content=json.dumps(invalid)),
+                    )
+                ]
+            ),
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        message=SimpleNamespace(content=json.dumps(valid)),
+                    )
+                ]
+            ),
+        ]
+
+        result = parse_request(
+            text="照顾宠物",
+            reference_time="2026-11-16T12:00:00+08:00",
+            timezone="Asia/Hong_Kong",
+            pets=[],
+            selected_pet_ids=selected,
+        )
+
+        self.assertEqual(result["draft"]["pet_ids"], selected)
+        self.assertEqual(openai.return_value.chat.completions.create.call_count, 2)
+        retry_messages = (
+            openai.return_value.chat.completions.create.call_args.kwargs["messages"]
+        )
+        self.assertIn("未通过格式或 Schema 校验", retry_messages[-1]["content"])
 
     def test_rejects_checklist_pet_outside_draft(self):
         data = make_draft(raw_text="照顾宠物")
