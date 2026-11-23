@@ -11,27 +11,25 @@ def check_timeouts():
         with conn.cursor(row_factory=dict_row) as cur:
             now_utc = datetime.now(timezone.utc)
             
-            # 按照组长要求：查询 in_service 状态，且 scheduled_end 已过
+            # 修复：加入 %s 占位符，严格判断 scheduled_end 已经小于当前时间
             cur.execute('''
                 SELECT 
-                    b.id as booking_id, b.request_id, b.helper_id, 
-                    b.status as booking_status, b.scheduled_end,
+                    b.id as booking_id, b.request_id, b.status as booking_status, b.scheduled_end,
                     r.id as req_id, r.version as req_version,
                     h.id as helper_id
                 FROM "Booking" b
                 JOIN "ServiceRequest" r ON b.request_id = r.id
                 JOIN "HelperProfile" h ON b.helper_id = h.id
                 WHERE b.status = 'in_service' 
-                  AND b.scheduled_end <= NOW() + interval '10 seconds'
+                  AND b.scheduled_end < %s
                 FOR UPDATE OF r, h, b
             ''', (now_utc,))
             timeout_bookings = cur.fetchall()
             
             for row in timeout_bookings:
                 try:
-                    print(f"  -> [Info] 发现服务超时订单: {row['booking_id']}，准备上报异常...")
+                    print(f"  -> [Info] 发现真实超时订单: {row['booking_id']}，准备上报异常...")
                     
-                    # 构造 B 哥函数需要的 r 和 b 字典 (必须包含 scheduled_end)
                     r_dict = {"id": row['req_id'], "version": row['req_version'], "status": "in_service"}
                     b_dict = {
                         "id": row['booking_id'], 
@@ -39,24 +37,19 @@ def check_timeouts():
                         "scheduled_end": row['scheduled_end']
                     }
                     
-                    # 调用 B 哥的异常上报函数
+                    # B哥的函数如果发现该单子已经是 exception 状态，会直接报错拦截，这天然实现了“幂等”
                     report_exception(
-                        c=cur,
-                        r=r_dict,
-                        b=b_dict,
-                        u=None,
-                        reason='service_timeout',
-                        description='帮手服务超时未提交核验'
+                        c=cur, r=r_dict, b=b_dict, u=None,
+                        reason='service_timeout', description='帮手超时未提交核验'
                     )
-                    print(f"  -> [Info] 成功拦截并上报异常: {row['booking_id']}")
+                    print(f"  -> [Info] 成功拦截并记录异常: {row['booking_id']}")
                 except Exception as e:
-                    print(f"  -> [Error] 上报异常失败 {row['booking_id']}: {e}")
+                    print(f"  -> [Error] 上报异常失败（可能已存在异常）: {e}")
             
             conn.commit()
-    print(f"[{datetime.now()}] [Info] 服务超时检查执行完毕。")
+    print(f"[{datetime.now()}] [Info] 定时检查执行完毕。")
 
 scheduler = BackgroundScheduler()
-
 def start_scheduler():
     scheduler.add_job(check_timeouts, 'interval', minutes=1)
     scheduler.start()
