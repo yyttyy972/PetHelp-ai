@@ -101,6 +101,39 @@ class AiParseEvaluationTests(unittest.TestCase):
 
         self.assertEqual(comparison["strict_checklist_mismatches"], [0])
 
+    def test_shared_item_can_be_split_across_all_selected_pets(self):
+        expected = [{
+            "item_key": "change_water",
+            "pet_id": None,
+            "allow_split_by_pet": True,
+            "content_keywords": ["换水"],
+        }]
+        actual = [
+            {
+                "item_key": "change_water_01",
+                "pet_id": "pet-1",
+                "content": "给第一只宠物换水",
+            },
+            {
+                "item_key": "change_water_02",
+                "pet_id": "pet-2",
+                "content": "给第二只宠物换水",
+            },
+        ]
+        comparison = compare_case(
+            _case(expected_checklist=expected),
+            _output({
+                "pet_ids": ["pet-1", "pet-2"],
+                "checklist_items": actual,
+            }),
+        )
+
+        self.assertEqual(comparison["strict_checklist_mismatches"], [])
+        self.assertEqual(comparison["unexpected_checklist_items"], [])
+        self.assertTrue(
+            comparison["checklist_checks"][0]["semantic_review_required"]
+        )
+
     def test_semantic_judge_accepts_structured_mock_response(self):
         judge_result = {
             "verdict": "passed",

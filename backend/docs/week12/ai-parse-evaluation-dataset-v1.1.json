@@ -35,7 +35,7 @@
     "home_visit 默认不要求逐只选择；有多只宠物时，清单 pet_id 指向特定宠物，共同事项可为 null。",
     "dog_walking 必须保留 pickup、departure、return 三个清单项，且顺序固定。",
     "errand_buy 必须保留 purchase、delivery；purchase.product_name 只写商品名称，品牌/口味/规格写入 content。",
-    "普通喂食份量不是必问信息；用户主动提供时按已知条件记录，未提供时不得自行猜测，也不必追问；明确说不喂食时不应生成喂食项。",
+    "缺少喂食份量时按后端 main 契约追问，不得自行猜测；明确说不喂食时不应生成喂食项。",
     "fee_type 表示服务是否免费/有偿；errand_buy 的 budget 是商品预算。服务报酬 agreed_fee 在预约阶段确定，不能混入 budget。",
     "window_start/window_end 必须是可确定的带时区时间窗口；模糊时间不得猜测。",
     "expected_duration_minutes 必须大于 0 且不超过窗口长度；冲突时追问，不输出可执行的矛盾时长。",
@@ -190,6 +190,7 @@
           {
             "item_key": "change_water",
             "pet_id": null,
+          "allow_split_by_pet": true,
             "content_keywords": [
               "换水",
               "两只猫"
@@ -198,6 +199,7 @@
           {
             "item_key": "clean_litter",
             "pet_id": null,
+          "allow_split_by_pet": true,
             "content_keywords": [
               "清理猫砂"
             ]
@@ -208,7 +210,7 @@
         "must_not_infer": [
           "未提供的时间、地点、费用、宠物身份或照料细节"
         ],
-        "annotation_note": "分别喂食应关联各自宠物；共同换水、清理猫砂可使用 null。"
+        "annotation_note": "分别喂食应关联各自宠物；共同换水、清理猫砂既可使用 pet_id=null，也可拆成覆盖全部宠物的逐宠物事项。"
       },
       "run_result": {
         "status": "not_run",
@@ -278,13 +280,14 @@
           }
         ],
         "required_question_topics": [
-          "time_window"
+          "time_window",
+          "food_portion"
         ],
         "question_topics_not_to_ask": [],
         "must_not_infer": [
           "未提供的时间、地点、费用、宠物身份或照料细节"
         ],
-        "annotation_note": "“明天下午”不能擅自转成具体起止时间；普通喂食份量未提供时不得猜测，但不必追问。"
+        "annotation_note": "“明天下午”不能擅自转成具体起止时间；按后端 main 契约，普通喂食份量未提供时不得猜测并须追问。"
       },
       "run_result": {
         "status": "not_run",

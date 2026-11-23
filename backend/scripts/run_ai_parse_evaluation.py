@@ -41,6 +41,7 @@ SEMANTIC_JUDGE_PROMPT = """你是邻宠帮 AI 需求解析评估裁判。用户�
 6. 根据 must_not_infer 判断模型是否擅自补充用户未提供的信息。
 7. 额外清单项只有在用户明确提出且不是重复内容时才合理；合理细化可以通过，编造事项必须失败。
 8. 信息不足、标注本身含糊或无法可靠判断时返回 needs_review，不要猜测。
+9. 标记 allow_split_by_pet 的共同事项，既可用一条 pet_id=null 表示，也可拆成覆盖全部已选宠物的逐宠物事项；两种形式都符合后端契约。
 
 只输出 JSON：
 {
@@ -118,7 +119,27 @@ def compare_case(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]
             if normalize_item_key(actual_items[index].get("item_key")) == expected_key
             and actual_items[index].get("pet_id") == expected_pet_id
         ]
-        if not candidates:
+        matched_indexes = candidates[:1]
+        if (
+            not matched_indexes
+            and expected_pet_id is None
+            and expected_item.get("allow_split_by_pet") is True
+        ):
+            selected_pet_ids = set(draft.get("pet_ids", []))
+            split_indexes = [
+                index
+                for index in unused_actual_indexes
+                if normalize_item_key(actual_items[index].get("item_key"))
+                == expected_key
+                and actual_items[index].get("pet_id") in selected_pet_ids
+            ]
+            split_pet_ids = {
+                actual_items[index].get("pet_id") for index in split_indexes
+            }
+            if selected_pet_ids and split_pet_ids == selected_pet_ids:
+                matched_indexes = split_indexes
+
+        if not matched_indexes:
             checklist_checks.append({
                 "passed": False,
                 "strict_failure": True,
@@ -128,18 +149,15 @@ def compare_case(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]
             strict_checklist_mismatches.append(expected_index)
             continue
 
-        actual_index = candidates[0]
-        unused_actual_indexes.remove(actual_index)
-        actual_item = actual_items[actual_index]
+        for actual_index in matched_indexes:
+            unused_actual_indexes.remove(actual_index)
+        matched_items = [actual_items[index] for index in matched_indexes]
+        actual_item = matched_items[0]
+        actual_value: Any = actual_item if len(matched_items) == 1 else matched_items
         searchable_text = " ".join(
-            str(actual_item.get(key) or "")
-            for key in (
-                "content",
-                "completion_condition",
-                "product_name",
-                "unit",
-                "quantity",
-            )
+            str(item.get(key) or "")
+            for item in matched_items
+            for key in ("content", "completion_condition", "product_name", "unit", "quantity")
         )
         missing_keywords = [
             keyword
@@ -148,8 +166,8 @@ def compare_case(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]
         ]
 
         detail_checks: dict[str, Any] = {
-            "item_key": actual_item.get("item_key"),
-            "pet_id": actual_item.get("pet_id"),
+            "item_key": [item.get("item_key") for item in matched_items],
+            "pet_id": [item.get("pet_id") for item in matched_items],
             "missing_content_keywords": missing_keywords,
         }
         for field in ("product_name", "quantity", "unit"):
@@ -170,7 +188,7 @@ def compare_case(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]
             for check in detail_checks.values()
             if isinstance(check, dict) and check.get("mode") == "strict"
         )
-        semantic_review_required = bool(missing_keywords) or any(
+        semantic_review_required = len(matched_items) > 1 or bool(missing_keywords) or any(
             isinstance(check, dict)
             and check.get("mode") == "semantic"
             and not check.get("exact_match")
@@ -181,7 +199,7 @@ def compare_case(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]
             "strict_failure": not strict_passed,
             "semantic_review_required": semantic_review_required,
             "expected": expected_item,
-            "actual": actual_item,
+            "actual": actual_value,
             "checks": detail_checks,
         })
         if not strict_passed:
