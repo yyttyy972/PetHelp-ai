@@ -1,18 +1,72 @@
-from uuid import UUID
-from fastapi import APIRouter,Depends,Query
+import json
+from pathlib import Path
+from uuid import UUID,uuid4
+from fastapi import APIRouter,Depends,Query,UploadFile,File
+from fastapi.responses import FileResponse,Response
 from pydantic import Field
 from app.schemas import Model
-from app.routers.api import me,db,one,own,insert,clean,Error
+from app.routers.api import me,db,one,own,insert,clean,update,Error
 from app.routers.bookings import locked
+from app.config import MEDIA_ROOT
 router=APIRouter(prefix='/api/v0')
 class Message(Model):
-    content:str=Field(min_length=1,max_length=2000)
+    content:str|None=Field(default=None,max_length=2000)
     client_id:UUID
+    kind:str='text'
+    media_url:str|None=None
+    latitude:float|None=Field(default=None,ge=-90,le=90)
+    longitude:float|None=Field(default=None,ge=-180,le=180)
+    accuracy_m:float|None=Field(default=None,ge=0,le=100000)
+    location_label:str|None=Field(default=None,max_length=200)
 class Read(Model):
     through_seq:int=Field(ge=0)
 class Review(Model):
     rating:int=Field(ge=1,le=5)
     comment:str=Field(default='',max_length=2000)
+class AddressBody(Model):
+    label:str=Field(min_length=1,max_length=30)
+    contact_name:str=Field(min_length=1,max_length=50)
+    contact_phone:str=Field(min_length=3,max_length=30)
+    address:str=Field(min_length=2,max_length=300)
+    latitude:float|None=Field(default=None,ge=-90,le=90)
+    longitude:float|None=Field(default=None,ge=-180,le=180)
+    is_default:bool=False
+class Signal(Model):
+    call_id:UUID
+    kind:str
+    payload:dict=Field(default_factory=dict)
+
+@router.get('/addresses')
+def addresses(u=Depends(me),c=Depends(db)):
+    rows=c.execute('SELECT * FROM "Address" WHERE user_id=%s AND deleted_at IS NULL ORDER BY is_default DESC,created_at',(u['id'],)).fetchall()
+    return {'items':clean(rows)}
+
+def save_address(c,u,body,id=None):
+    data=body.model_dump()
+    if data['is_default'] or not c.execute('SELECT 1 FROM "Address" WHERE user_id=%s AND deleted_at IS NULL AND (%s::uuid IS NULL OR id<>%s)',(u['id'],id,id)).fetchone():
+        data['is_default']=True
+        c.execute('UPDATE "Address" SET is_default=false,updated_at=now() WHERE user_id=%s AND deleted_at IS NULL',(u['id'],))
+    if id:
+        row=one(c,'Address',id,True)
+        if row['user_id']!=u['id']:raise Error(403,'forbidden')
+        return clean(update(c,'Address',id,data))
+    return clean(insert(c,'Address',{'user_id':u['id'],**data}))
+
+@router.post('/addresses',status_code=201)
+def address_create(body:AddressBody,u=Depends(me),c=Depends(db)):return save_address(c,u,body)
+
+@router.patch('/addresses/{id}')
+def address_update(id:UUID,body:AddressBody,u=Depends(me),c=Depends(db)):return save_address(c,u,body,id)
+
+@router.delete('/addresses/{id}',status_code=204)
+def address_delete(id:UUID,u=Depends(me),c=Depends(db)):
+    row=one(c,'Address',id,True)
+    if row['user_id']!=u['id']:raise Error(403,'forbidden')
+    update(c,'Address',id,{'deleted_at':c.execute('SELECT now() AS n').fetchone()['n'],'is_default':False})
+    if row['is_default']:
+        replacement=c.execute('SELECT id FROM "Address" WHERE user_id=%s AND deleted_at IS NULL ORDER BY created_at LIMIT 1',(u['id'],)).fetchone()
+        if replacement:update(c,'Address',replacement['id'],{'is_default':True})
+    return Response(status_code=204)
 
 @router.get('/conversations')
 def conversations(limit:int=Query(20,ge=1,le=100),cursor:UUID|None=None,u=Depends(me),c=Depends(db)):
@@ -35,11 +89,53 @@ def messages(id:UUID,after:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=100),u=
 @router.post('/bookings/{id}/messages',status_code=201)
 def send(id:UUID,body:Message,u=Depends(me),c=Depends(db)):
     locked(c,id,u)
+    if body.kind not in ['text','audio','location']:raise Error(422,'validation_error')
+    if body.kind=='text' and not (body.content or '').strip():raise Error(422,'validation_error')
+    if body.kind=='audio':
+        prefix=f'/api/v0/bookings/{id}/chat-media/'
+        if not body.media_url or not body.media_url.startswith(prefix) or '..' in body.media_url:raise Error(422,'invalid_media')
+        filename=body.media_url.removeprefix(prefix)
+        if not (MEDIA_ROOT/'chat'/str(id)/filename).is_file():raise Error(422,'invalid_media')
+    if body.kind=='location' and (body.latitude is None or body.longitude is None):raise Error(422,'validation_error')
     old=c.execute('SELECT * FROM "ChatMessage" WHERE sender_id=%s AND client_id=%s',(u['id'],body.client_id)).fetchone()
     if old:
-        if old['booking_id']!=id or old['content']!=body.content:raise Error(409,'idempotency_conflict')
+        if old['booking_id']!=id or old['kind']!=body.kind:raise Error(409,'idempotency_conflict')
         return clean(old)
-    return clean(insert(c,'ChatMessage',dict(booking_id=id,sender_id=u['id'],**body.model_dump())))
+    data=body.model_dump();data['content']=(data['content'] or '').strip() or None
+    return clean(insert(c,'ChatMessage',dict(booking_id=id,sender_id=u['id'],**data)))
+
+@router.post('/bookings/{id}/chat-media',status_code=201)
+def chat_media_upload(id:UUID,file:UploadFile=File(...),u=Depends(me),c=Depends(db)):
+    locked(c,id,u)
+    allowed={'audio/webm':'.webm','audio/ogg':'.ogg','audio/mp4':'.m4a','audio/mpeg':'.mp3','audio/wav':'.wav'}
+    content_type=(file.content_type or '').split(';',1)[0]
+    if content_type not in allowed:raise Error(422,'invalid_media','仅支持 WebM、Ogg、M4A、MP3 或 WAV 语音。')
+    data=file.file.read(10*1024*1024+1)
+    if not data or len(data)>10*1024*1024:raise Error(413,'file_too_large','语音不能超过 10MB。')
+    name=str(uuid4())+allowed[content_type]
+    path=MEDIA_ROOT/'chat'/str(id)/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+    return {'url':f'/api/v0/bookings/{id}/chat-media/{name}'}
+
+@router.get('/bookings/{id}/chat-media/{name}')
+def chat_media(id:UUID,name:str,u=Depends(me),c=Depends(db)):
+    locked(c,id,u)
+    if Path(name).name!=name:raise Error(404,'not_found')
+    path=MEDIA_ROOT/'chat'/str(id)/name
+    if not path.is_file():raise Error(404,'not_found')
+    media={'.webm':'audio/webm','.ogg':'audio/ogg','.m4a':'audio/mp4','.mp3':'audio/mpeg','.wav':'audio/wav'}.get(path.suffix.lower(),'application/octet-stream')
+    return FileResponse(path,media_type=media)
+
+@router.get('/bookings/{id}/signals')
+def signals(id:UUID,after:int=Query(0,ge=0),call_id:UUID|None=None,u=Depends(me),c=Depends(db)):
+    locked(c,id,u)
+    rows=c.execute('SELECT * FROM "CallSignal" WHERE booking_id=%s AND seq>%s AND sender_id<>%s AND created_at>now()-interval \'2 minutes\' AND (%s::uuid IS NULL OR call_id=%s) ORDER BY seq LIMIT 200',(id,after,u['id'],call_id,call_id)).fetchall()
+    return {'items':clean(rows)}
+
+@router.post('/bookings/{id}/signals',status_code=201)
+def signal(id:UUID,body:Signal,u=Depends(me),c=Depends(db)):
+    locked(c,id,u)
+    if body.kind not in ['offer','answer','ice','hangup'] or len(json.dumps(body.payload))>30000:raise Error(422,'validation_error')
+    return clean(insert(c,'CallSignal',dict(booking_id=id,sender_id=u['id'],**body.model_dump())))
 
 @router.post('/bookings/{id}/messages/read')
 def read(id:UUID,body:Read,u=Depends(me),c=Depends(db)):

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import asyncio
+from pathlib import Path
 from uuid import UUID
 import jwt
 import psycopg
@@ -10,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from pydantic import ValidationError
 from app.routers.api import router, Error, insert
@@ -56,7 +58,7 @@ async def transaction(request: Request, call_next):
         size = 0
         async for chunk in request.stream():
             size += len(chunk)
-            if size > 6 * 1024 * 1024:
+            if size > 11 * 1024 * 1024:
                 raise Error(413, 'file_too_large')
             parts.append(chunk)
         raw = b''.join(parts)
@@ -177,3 +179,10 @@ from app.cron_tasks import start_scheduler
 def startup_event():
     start_scheduler()
     print("定时任务调度器已成功挂载到主程序。")
+
+# A production build can be served by the same process as the API. Keeping a
+# single HTTPS origin is required for browser microphone, camera and location
+# permissions and avoids exposing a second public port.
+frontend_dist = Path(__file__).resolve().parents[2] / 'frontend-html' / 'dist'
+if frontend_dist.is_dir():
+    app.mount('/', StaticFiles(directory=frontend_dist, html=True), name='frontend')

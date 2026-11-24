@@ -52,9 +52,28 @@ export function initProfiles(user,onUser) {
     user=await api('/users/me',{method:'PATCH',body});onUser(user);if(user.avatar_url){avatar.src=user.avatar_url;avatar.hidden=false;}
     bf.elements.avatar.value='';notice(bio,'个人资料已保存');
   });});
-  panel('addresses','<p>常用地址在“我的资料”中维护。</p><button type="button" data-route="bio">编辑常用地址</button>');
+  initAddresses();
   if(user.roles.includes('owner'))initPets();else panel('pet','<p>当前账号没有宠主身份。</p>');
   if(user.roles.includes('helper'))initHelper();else panel('preferences','<p>当前账号没有帮手身份。</p>');
+}
+function initAddresses(){
+  const box=panel('addresses','');let rows=[],editing=null;
+  const f=form(box,`<h2>地址簿</h2><p>详细地址仅本人可见，不会在大厅公开。</p><div id="address-list"></div><button type="button" id="new-address">新增地址</button><h3 id="address-title">新增地址</h3><form id="address-form">
+    ${field('label','标签（如：家、公司）','text',true)}${field('contact_name','联系人','text',true)}${field('contact_phone','联系电话','tel',true)}${area('address','详细地址')}
+    ${field('latitude','纬度（可选）','number')}${field('longitude','经度（可选）','number')}<label><input name="is_default" type="checkbox"> 设为默认地址</label><button>保存地址</button><button type="button" id="cancel-address">取消编辑</button></form>`);
+  f.elements.address.required=true;f.elements.latitude.step=f.elements.longitude.step='any';
+  function reset(){editing=null;f.reset();box.querySelector('#address-title').textContent='新增地址';}
+  async function load(){
+    rows=(await api('/addresses')).items;
+    box.querySelector('#address-list').innerHTML=rows.length?rows.map(a=>`<article class="pet-entry"><h3>${escape(a.label)}${a.is_default?' · 默认':''}</h3><p>${escape(a.contact_name)} · ${escape(a.contact_phone)}</p><p>${escape(a.address)}</p><button type="button" data-edit-address="${a.id}">编辑</button><button type="button" data-delete-address="${a.id}">删除</button></article>`).join(''):'<p>还没有保存的地址。</p>';
+  }
+  box.querySelector('#new-address').onclick=()=>{reset();f.scrollIntoView({block:'start'});};box.querySelector('#cancel-address').onclick=reset;
+  box.addEventListener('click',e=>{
+    const edit=e.target.closest('[data-edit-address]');if(edit){editing=rows.find(x=>x.id===edit.dataset.editAddress);populate(f,editing);f.elements.is_default.checked=editing.is_default;box.querySelector('#address-title').textContent='编辑地址';}
+    const del=e.target.closest('[data-delete-address]');if(del&&confirm('确认删除该地址？'))run(box,async()=>{await api('/addresses/'+del.dataset.deleteAddress,{method:'DELETE'});reset();await load();notice(box,'地址已删除');});
+  });
+  f.onsubmit=e=>{e.preventDefault();run(box,async()=>{const data=values(f);data.is_default=f.elements.is_default.checked;for(const k of ['latitude','longitude'])data[k]=data[k]===''?null:Number(data[k]);await api(editing?'/addresses/'+editing.id:'/addresses',{method:editing?'PATCH':'POST',body:data});reset();await load();notice(box,'地址已保存');});};
+  run(box,async()=>{await load();notice(box,'');});
 }
 function initPets() {
   const box=panel('pet','');let editing=null;let rows=[];let urls=[];

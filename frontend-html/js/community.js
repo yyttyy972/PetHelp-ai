@@ -18,7 +18,7 @@ export function initCommunity(user) {
   const box = document.createElement("section");
   box.className = "live-profile";
   box.innerHTML =
-    '<h2>消息中心</h2><p>预约双方可以沟通；异常处理请在预约详情操作并留档。</p><button id="refresh-messages" type="button">刷新消息</button><div id="conversations"></div><h3 id="conversation-title"></h3><details><summary>预约动态与异常提醒</summary><div id="conversation-events"></div></details><div id="live-messages"></div><form id="send-message" hidden><label>消息<textarea name="content" maxlength="2000" required></textarea></label><button>发送</button></form><p id="message-status" role="status"></p>';
+    '<h2>消息中心</h2><p>预约双方可以使用文字、语音、视频和实时位置沟通。麦克风、摄像头和定位均需主动授权。</p><button id="refresh-messages" type="button">刷新消息</button><div id="conversations"></div><h3 id="conversation-title"></h3><details><summary>预约动态与异常提醒</summary><div id="conversation-events"></div></details><div id="call-panel" hidden><div class="video-grid"><video id="remote-video" autoplay playsinline></video><video id="local-video" autoplay muted playsinline></video></div><button type="button" id="hangup-call">结束通话</button></div><div id="live-messages"></div><form id="send-message" hidden><label>消息<textarea name="content" maxlength="2000"></textarea></label><div class="communication-actions"><button>发送文字</button><button type="button" id="record-audio">开始录音</button><button type="button" id="video-call">发起视频</button><button type="button" id="share-location">开始共享位置</button></div></form><p id="message-status" role="status"></p>';
   screen.append(box);
   // Remove all illustrative chat history and fake application actions from reachable routes.
   for (const name of ["chat", "alien-chat", "calico-chat", "task"]) {
@@ -31,9 +31,52 @@ export function initCommunity(user) {
     busy = false,
     sending = false,
     items = [],
-    retry = null;
+    retry = null,
+    mediaUrls = [],
+    recorder = null,
+    audioChunks = [],
+    locationWatch = null,
+    lastLocationSent = 0,
+    peer = null,
+    localStream = null,
+    callId = null,
+    signalAfter = 0;
   const status = box.querySelector("#message-status"),
     form = box.querySelector("form");
+  async function sendPayload(payload) {
+    if (!selected) return;
+    await api("/bookings/" + selected + "/messages", {method:"POST",body:{client_id:crypto.randomUUID(),...payload}});
+    await refresh();
+  }
+  async function hydrateAudio() {
+    mediaUrls.forEach(URL.revokeObjectURL);mediaUrls=[];
+    for (const audio of box.querySelectorAll('audio[data-media]')) try {
+      const blob=await api(audio.dataset.media.replace('/api/v0',''),{blob:true,timeout:30000});
+      const url=URL.createObjectURL(blob);mediaUrls.push(url);audio.src=url;
+    } catch { audio.replaceWith(document.createTextNode('语音加载失败')); }
+  }
+  function stopLocation(){if(locationWatch!==null){navigator.geolocation.clearWatch(locationWatch);locationWatch=null;}box.querySelector('#share-location').textContent='开始共享位置';}
+  async function postSignal(kind,payload={}){if(selected&&callId)await api(`/bookings/${selected}/signals`,{method:'POST',body:{call_id:callId,kind,payload}});}
+  function makePeer(){
+    const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+    pc.onicecandidate=e=>{if(e.candidate)postSignal('ice',e.candidate.toJSON()).catch(()=>{});};
+    pc.ontrack=e=>{box.querySelector('#remote-video').srcObject=e.streams[0];};
+    pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState))endCall(false);};
+    return pc;
+  }
+  async function ensureMedia(){if(!localStream)localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});box.querySelector('#local-video').srcObject=localStream;}
+  async function startCall(){
+    if(!selected||peer)return;callId=crypto.randomUUID();signalAfter=0;await ensureMedia();peer=makePeer();localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+    await peer.setLocalDescription(await peer.createOffer());await postSignal('offer',{sdp:peer.localDescription.sdp,type:peer.localDescription.type});box.querySelector('#call-panel').hidden=false;status.textContent='正在等待对方接听…';
+  }
+  async function acceptCall(signal){
+    if(peer)return;callId=signal.call_id;await ensureMedia();peer=makePeer();localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));await peer.setRemoteDescription(signal.payload);await peer.setLocalDescription(await peer.createAnswer());await postSignal('answer',{sdp:peer.localDescription.sdp,type:peer.localDescription.type});box.querySelector('#call-panel').hidden=false;status.textContent='已接听视频通话';
+  }
+  function endCall(notify=true){if(notify)postSignal('hangup').catch(()=>{});peer?.close();peer=null;localStream?.getTracks().forEach(t=>t.stop());localStream=null;callId=null;box.querySelector('#local-video').srcObject=null;box.querySelector('#remote-video').srcObject=null;box.querySelector('#call-panel').hidden=true;}
+  async function pollSignals(){
+    if(!selected||document.hidden)return;
+    try {const query=`?after=${signalAfter}`+(callId?`&call_id=${callId}`:'');const r=await api(`/bookings/${selected}/signals${query}`);for(const s of r.items){signalAfter=Math.max(signalAfter,s.seq);if(s.kind==='offer')await acceptCall(s);else if(s.kind==='answer'&&peer)await peer.setRemoteDescription(s.payload);else if(s.kind==='ice'&&peer)await peer.addIceCandidate(s.payload);else if(s.kind==='hangup')endCall(false);}} catch(e){if(peer)status.textContent='视频信令同步失败：'+e.message;}
+  }
   async function refresh() {
     if (busy || !hasToken()) return;
     busy = true;
@@ -96,9 +139,10 @@ export function initCommunity(user) {
           items
             .map(
               (m) =>
-                `<article class="pet-entry"><strong>${m.sender_id === user.id ? "我" : "对方"}</strong><p style="white-space:pre-wrap">${esc(m.content)}</p><small>${esc(new Date(m.created_at).toLocaleString())}</small></article>`,
+                `<article class="pet-entry"><strong>${m.sender_id === user.id ? "我" : "对方"}</strong>${m.kind==='audio'?`<p><audio controls preload="none" data-media="${esc(m.media_url)}"></audio></p>`:m.kind==='location'?`<p>实时位置（精度约 ${Math.round(m.accuracy_m||0)} 米）<br><a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${m.latitude}&mlon=${m.longitude}#map=18/${m.latitude}/${m.longitude}">在地图中查看</a></p>`:`<p style="white-space:pre-wrap">${esc(m.content)}</p>`}<small>${esc(new Date(m.created_at).toLocaleString())}</small></article>`,
             )
             .join("") || "<p>还没有消息。</p>";
+        await hydrateAudio();
         if (!document.hidden)
           await api("/bookings/" + id + "/messages/read", {
             method: "POST",
@@ -119,6 +163,7 @@ export function initCommunity(user) {
     after = 0;
     items = [];
     retry = null;
+    stopLocation();endCall(false);signalAfter=0;
     form.reset();
     form.hidden = false;
     box.querySelector("#conversation-title").textContent = b.textContent;
@@ -150,6 +195,23 @@ export function initCommunity(user) {
       form.querySelector("button").disabled = false;
     }
   };
+  box.querySelector('#record-audio').onclick=async()=>{
+    const button=box.querySelector('#record-audio');
+    try{
+      if(recorder?.state==='recording'){recorder.stop();return;}
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});audioChunks=[];recorder=new MediaRecorder(stream);
+      recorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data);};
+      recorder.onstop=async()=>{button.textContent='开始录音';stream.getTracks().forEach(t=>t.stop());try{const blob=new Blob(audioChunks,{type:recorder.mimeType||'audio/webm'});const data=new FormData();data.append('file',blob,'voice.webm');const uploaded=await api('/bookings/'+selected+'/chat-media',{method:'POST',body:data,timeout:30000});await sendPayload({kind:'audio',media_url:uploaded.url});status.textContent='语音已发送';}catch(e){status.textContent=e.message;}};
+      recorder.start();button.textContent='停止并发送';status.textContent='正在录音…';
+    }catch(e){status.textContent='无法使用麦克风：'+e.message;}
+  };
+  box.querySelector('#video-call').onclick=()=>startCall().catch(e=>{endCall(false);status.textContent='无法发起视频：'+e.message;});box.querySelector('#hangup-call').onclick=()=>endCall(true);
+  box.querySelector('#share-location').onclick=()=>{
+    if(locationWatch!==null){stopLocation();status.textContent='已停止位置共享';return;}
+    if(!navigator.geolocation){status.textContent='当前浏览器不支持定位';return;}
+    box.querySelector('#share-location').textContent='停止共享位置';
+    locationWatch=navigator.geolocation.watchPosition(async p=>{if(Date.now()-lastLocationSent<15000)return;lastLocationSent=Date.now();try{await sendPayload({kind:'location',latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:p.coords.accuracy,location_label:'实时位置'});status.textContent='位置共享中，约每 15 秒更新';}catch(e){status.textContent=e.message;}},e=>{stopLocation();status.textContent='无法获取位置：'+e.message;},{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+  };
   box.querySelector("#refresh-messages").onclick = refresh;
   window.addEventListener("hashchange", () => {
     if (location.hash === "#inbox") refresh();
@@ -157,6 +219,7 @@ export function initCommunity(user) {
   setInterval(() => {
     if (location.hash === "#inbox" && !document.hidden) refresh();
   }, 5000);
+  setInterval(pollSignals,1000);
   if (location.hash === "#inbox") refresh();
   const privacy = app.querySelector("[data-screen=privacy]");
   for (const child of [...privacy.children])
