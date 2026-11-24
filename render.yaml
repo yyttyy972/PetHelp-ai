@@ -21,11 +21,13 @@ services:
         sync: false
       - key: AI_MODEL
         sync: false
-      - key: R2_ACCESS_KEY_ID
+      - key: AWS_ACCESS_KEY_ID
         sync: false
-      - key: R2_SECRET_ACCESS_KEY
+      - key: AWS_SECRET_ACCESS_KEY
         sync: false
-      - key: R2_BUCKET_NAME
-        value: pethelp-media
-      - key: R2_ENDPOINT_URL
+      - key: AWS_ENDPOINT_URL_S3
         sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: S3_BUCKET_NAME
+        value: assets

@@ -3,25 +3,29 @@ from pathlib import Path
 
 from app.config import MEDIA_ROOT
 
-_required = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT_URL"]
-R2_ENABLED = all(os.getenv(name) for name in _required)
+_access_key = os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("R2_ACCESS_KEY_ID")
+_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY") or os.getenv("R2_SECRET_ACCESS_KEY")
+_bucket = os.getenv("S3_BUCKET_NAME") or os.getenv("R2_BUCKET_NAME")
+_endpoint = os.getenv("AWS_ENDPOINT_URL_S3") or os.getenv("R2_ENDPOINT_URL")
+S3_ENABLED = all((_access_key, _secret_key, _bucket, _endpoint))
 
-if R2_ENABLED:
+if S3_ENABLED:
     import boto3
+    from botocore.config import Config
     from botocore.exceptions import ClientError
 
-    _bucket = os.environ["R2_BUCKET_NAME"]
     _client = boto3.client(
         "s3",
-        endpoint_url=os.environ["R2_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        region_name="auto",
+        endpoint_url=_endpoint,
+        aws_access_key_id=_access_key,
+        aws_secret_access_key=_secret_key,
+        region_name=os.getenv("AWS_REGION", "auto"),
+        config=Config(s3={"addressing_style": "path"}),
     )
 
 
 def put(key: str, data: bytes, content_type: str) -> None:
-    if R2_ENABLED:
+    if S3_ENABLED:
         _client.put_object(Bucket=_bucket, Key=key, Body=data, ContentType=content_type)
         return
     path = MEDIA_ROOT / key
@@ -30,7 +34,7 @@ def put(key: str, data: bytes, content_type: str) -> None:
 
 
 def exists(key: str) -> bool:
-    if R2_ENABLED:
+    if S3_ENABLED:
         try:
             _client.head_object(Bucket=_bucket, Key=key)
             return True
@@ -40,7 +44,7 @@ def exists(key: str) -> bool:
 
 
 def get(key: str) -> tuple[bytes, str]:
-    if R2_ENABLED:
+    if S3_ENABLED:
         response = _client.get_object(Bucket=_bucket, Key=key)
         return response["Body"].read(), response.get("ContentType") or "application/octet-stream"
     path = MEDIA_ROOT / key
