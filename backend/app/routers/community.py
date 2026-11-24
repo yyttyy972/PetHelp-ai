@@ -2,12 +2,13 @@ import json
 from pathlib import Path
 from uuid import UUID,uuid4
 from fastapi import APIRouter,Depends,Query,UploadFile,File
-from fastapi.responses import FileResponse,Response
+from fastapi.responses import Response
 from pydantic import Field
 from app.schemas import Model
 from app.routers.api import me,db,one,own,insert,clean,update,Error
 from app.routers.bookings import locked
 from app.config import MEDIA_ROOT
+from app import storage
 router=APIRouter(prefix='/api/v0')
 class Message(Model):
     content:str|None=Field(default=None,max_length=2000)
@@ -95,7 +96,7 @@ def send(id:UUID,body:Message,u=Depends(me),c=Depends(db)):
         prefix=f'/api/v0/bookings/{id}/chat-media/'
         if not body.media_url or not body.media_url.startswith(prefix) or '..' in body.media_url:raise Error(422,'invalid_media')
         filename=body.media_url.removeprefix(prefix)
-        if not (MEDIA_ROOT/'chat'/str(id)/filename).is_file():raise Error(422,'invalid_media')
+        if not storage.exists(f'chat/{id}/{filename}'):raise Error(422,'invalid_media')
     if body.kind=='location' and (body.latitude is None or body.longitude is None):raise Error(422,'validation_error')
     old=c.execute('SELECT * FROM "ChatMessage" WHERE sender_id=%s AND client_id=%s',(u['id'],body.client_id)).fetchone()
     if old:
@@ -113,17 +114,18 @@ def chat_media_upload(id:UUID,file:UploadFile=File(...),u=Depends(me),c=Depends(
     data=file.file.read(10*1024*1024+1)
     if not data or len(data)>10*1024*1024:raise Error(413,'file_too_large','语音不能超过 10MB。')
     name=str(uuid4())+allowed[content_type]
-    path=MEDIA_ROOT/'chat'/str(id)/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+    storage.put(f'chat/{id}/{name}',data,content_type)
     return {'url':f'/api/v0/bookings/{id}/chat-media/{name}'}
 
 @router.get('/bookings/{id}/chat-media/{name}')
 def chat_media(id:UUID,name:str,u=Depends(me),c=Depends(db)):
     locked(c,id,u)
     if Path(name).name!=name:raise Error(404,'not_found')
-    path=MEDIA_ROOT/'chat'/str(id)/name
-    if not path.is_file():raise Error(404,'not_found')
-    media={'.webm':'audio/webm','.ogg':'audio/ogg','.m4a':'audio/mp4','.mp3':'audio/mpeg','.wav':'audio/wav'}.get(path.suffix.lower(),'application/octet-stream')
-    return FileResponse(path,media_type=media)
+    key=f'chat/{id}/{name}'
+    if not storage.exists(key):raise Error(404,'not_found')
+    data,stored_type=storage.get(key)
+    media={'.webm':'audio/webm','.ogg':'audio/ogg','.m4a':'audio/mp4','.mp3':'audio/mpeg','.wav':'audio/wav'}.get(Path(name).suffix.lower(),stored_type)
+    return Response(data,media_type=media)
 
 @router.get('/bookings/{id}/signals')
 def signals(id:UUID,after:int=Query(0,ge=0),call_id:UUID|None=None,u=Depends(me),c=Depends(db)):

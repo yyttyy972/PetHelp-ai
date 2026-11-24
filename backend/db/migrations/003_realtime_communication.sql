@@ -24,6 +24,7 @@ ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS longitude double precision;
 ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS accuracy_m double precision;
 ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS location_label varchar(200);
 ALTER TABLE "ChatMessage" DROP CONSTRAINT IF EXISTS "ChatMessage_content_check";
+ALTER TABLE "ChatMessage" DROP CONSTRAINT IF EXISTS chat_message_payload;
 ALTER TABLE "ChatMessage" ALTER COLUMN content DROP NOT NULL;
 ALTER TABLE "ChatMessage" ADD CONSTRAINT chat_message_payload CHECK (
  (kind='text' AND content IS NOT NULL AND length(content) BETWEEN 1 AND 2000) OR

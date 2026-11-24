@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: pethelp-ai
+    runtime: docker
+    plan: free
+    branch: feature/html-integration
+    autoDeployTrigger: commit
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOAD_DEMO_DATA
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: pethelp-media
+      - key: R2_ENDPOINT_URL
+        sync: false

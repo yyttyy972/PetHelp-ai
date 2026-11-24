@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from datetime import datetime, timezone
 from decimal import Decimal
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, Query
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response
 from psycopg import sql
 from psycopg.types.json import Jsonb
 import jwt
@@ -11,6 +11,7 @@ from PIL import Image, UnidentifiedImageError
 from app import schemas as S
 from app.db import connection
 from app.config import COMMUNITY, JWT_SECRET, MEDIA_ROOT
+from app import storage
 from app.core.security import hash_password, verify_password, token
 
 router=APIRouter(prefix="/api/v0")
@@ -58,7 +59,7 @@ def user_view(u): return clean({k:u[k] for k in ['id','display_name','roles','co
 def media_ref(url,u,purpose):
     if url is None:return
     prefix=f"/api/v0/media/{u['id']}/{purpose}/"
-    if not url.startswith(prefix) or '..' in url or not (MEDIA_ROOT/url.removeprefix('/api/v0/media/')).is_file(): raise Error(422,"invalid_media")
+    if not url.startswith(prefix) or '..' in url or not storage.exists(url.removeprefix('/api/v0/media/')): raise Error(422,"invalid_media")
 def helper(c,u,lock=False):
     h=c.execute('SELECT * FROM "HelperProfile" WHERE user_id=%s AND deleted_at IS NULL'+(' FOR UPDATE' if lock else ''),(u['id'],)).fetchone()
     if not h: raise Error(404,"not_found")
@@ -223,23 +224,21 @@ def upload(file:UploadFile=File(...),purpose:str=Form(...),u=Depends(me)):
         if file.content_type!={'JPEG':'image/jpeg','PNG':'image/png','WEBP':'image/webp'}[fmt]:raise ValueError()
         im.verify();im=Image.open(io.BytesIO(data));im.load()
     except (ValueError,OSError,UnidentifiedImageError,Image.DecompressionBombError):raise Error(422,'invalid_media')
-    rel=f"{u['id']}/{purpose}/{uuid4()}.png";path=MEDIA_ROOT/rel;path.parent.mkdir(parents=True,exist_ok=True)
-    im.save(path,format='PNG')
+    rel=f"{u['id']}/{purpose}/{uuid4()}.png";out=io.BytesIO();im.save(out,format='PNG');storage.put(rel,out.getvalue(),'image/png')
     return {'url':'/api/v0/media/'+rel}
 @router.get('/media/{relative_path:path}')
 def media(relative_path:str,request:Request,c=Depends(db)):
-    path=(MEDIA_ROOT/relative_path).resolve()
-    if not path.is_relative_to(MEDIA_ROOT) or not path.is_file():raise Error(404,'not_found')
+    if '..' in relative_path or not storage.exists(relative_path):raise Error(404,'not_found')
     parts=relative_path.split('/')
     if len(parts)!=3 or parts[1] not in ['avatar','pet','evidence']:raise Error(404,'not_found')
     url='/api/v0/media/'+relative_path
-    if parts[1]=='avatar' and c.execute('SELECT 1 FROM "User" WHERE avatar_url=%s AND deleted_at IS NULL',(url,)).fetchone():return FileResponse(path,media_type='image/png')
+    if parts[1]=='avatar' and c.execute('SELECT 1 FROM "User" WHERE avatar_url=%s AND deleted_at IS NULL',(url,)).fetchone():return Response(storage.get(relative_path)[0],media_type='image/png')
     u=me(request,c)
-    if str(u['id'])==parts[0]:return FileResponse(path,media_type='image/png')
+    if str(u['id'])==parts[0]:return Response(storage.get(relative_path)[0],media_type='image/png')
     if parts[1]=='evidence':
         allowed=c.execute('SELECT 1 FROM "ExecutionRecord" e JOIN "Booking" b ON b.id=e.booking_id JOIN "HelperProfile" h ON h.id=b.helper_id WHERE %s=ANY(e.photo_urls) AND (b.owner_id=%s OR h.user_id=%s) AND e.deleted_at IS NULL',(url,u['id'],u['id'])).fetchone()
         if not allowed:raise Error(403,'forbidden')
-        return FileResponse(path,media_type='image/png')
+        return Response(storage.get(relative_path)[0],media_type='image/png')
     rows=c.execute('SELECT r.* FROM "ServiceRequest" r JOIN "RequestPet" rp ON rp.request_id=r.id JOIN "PetProfile" p ON p.id=rp.pet_id WHERE p.photo_url=%s AND r.deleted_at IS NULL',(url,)).fetchall()
     if not any(participant(c,r,u) for r in rows):raise Error(403,'forbidden')
-    return FileResponse(path,media_type='image/png')
+    return Response(storage.get(relative_path)[0],media_type='image/png')
