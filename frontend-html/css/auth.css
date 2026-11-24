@@ -1,0 +1,12 @@
+.auth-panel { box-sizing:border-box; width:min(92vw,420px); border:0; border-radius:26px; padding:28px; color:#453729; background:#fffaf1; font:16px/1.5 'Microsoft YaHei',sans-serif; }
+.auth-panel::backdrop { background:rgba(55,40,20,.4); }
+.auth-panel h1 {font-size:24px;margin:0 0 8px;}
+.auth-panel label {display:block;margin:14px 0;}
+.auth-panel input,.auth-panel select {box-sizing:border-box;display:block;width:100%;padding:12px;border:1px solid #d8cbb9;border-radius:12px;font:inherit;background:white;}
+.auth-panel textarea {box-sizing:border-box;display:block;width:100%;padding:12px;border:1px solid #d8cbb9;border-radius:12px;font:inherit;min-height:80px;}
+.auth-panel button {width:100%;border:0;border-radius:20px;padding:12px;margin:5px 0;background:#ffad61;color:#34271d;font:inherit;cursor:pointer;}
+.auth-panel button:disabled {opacity:.6;cursor:wait;}
+.auth-panel fieldset {border:0;padding:0;margin:0;}
+.auth-panel [hidden] {display:none!important;}
+.auth-panel #auth-status {color:#a34320;min-height:24px;}
+.app button[data-role-choice]:disabled {opacity:.45;cursor:not-allowed;}

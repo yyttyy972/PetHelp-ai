@@ -1,0 +1,10 @@
+.live-profile {margin:18px 24px;padding:20px;background:#fffdf8;border-radius:22px;box-shadow:0 3px 6px #0002;color:#352c24;font:16px/1.6 'Microsoft YaHei',sans-serif;}
+.live-profile label {display:block;margin:10px 0;}
+.live-profile input:not([type=checkbox]),.live-profile textarea,.live-profile select {box-sizing:border-box;width:100%;padding:10px;border:1px solid #d7cdbd;border-radius:10px;font:inherit;background:white;}
+.live-profile button {border:0;border-radius:16px;background:#ffad61;padding:10px 16px;margin:8px 6px 8px 0;font:inherit;cursor:pointer;}
+.live-profile button:disabled {opacity:.5;cursor:wait;}
+.live-profile fieldset {border:0;padding:0;margin:0;}
+.live-profile .notice {color:#96451d;white-space:pre-wrap;}
+.live-profile .pet-entry,.live-profile .time-entry {border-bottom:1px solid #e9dfce;padding:12px 0;}
+.live-profile img {width:110px;height:110px;object-fit:cover;border-radius:16px;}
+.live-profile [hidden] {display:none!important;}

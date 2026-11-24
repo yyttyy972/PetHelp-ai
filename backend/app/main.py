@@ -26,6 +26,10 @@ app.include_router(bookings_router)
 from app.routers.exceptions import router as exceptions_router
 app.include_router(exceptions_router)
 app.include_router(match_router)
+from app.routers.applications import router as applications_router
+app.include_router(applications_router)
+from app.routers.community import router as community_router
+app.include_router(community_router)
 
 @app.get('/health')
 def health():

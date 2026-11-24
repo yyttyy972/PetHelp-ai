@@ -124,6 +124,10 @@ def helper_put(body:S.Helper,u=Depends(me),c=Depends(db)):
     if body.address_tag and any(x in body.address_tag for x in ['室','单元','门牌']):raise Error(422,'invalid_profile')
     old=c.execute('SELECT * FROM "HelperProfile" WHERE user_id=%s AND deleted_at IS NULL FOR UPDATE',(u['id'],)).fetchone()
     return clean(update(c,'HelperProfile',old['id'],d) if old else insert(c,'HelperProfile',dict(user_id=u['id'],**d)))
+@router.get('/helpers/me')
+def helper_me(u=Depends(me),c=Depends(db)):
+    role(u,'helper');return clean(helper(c,u))
+
 @router.get('/helpers/{id}')
 def helper_get(id:UUID,u=Depends(me),c=Depends(db)):
     h=clean(one(c,'HelperProfile',id));return {k:v for k,v in h.items() if k not in ['created_at','updated_at']}

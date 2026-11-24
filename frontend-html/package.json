@@ -1,0 +1,20 @@
+{
+  "name": "pethelp-html",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:profiles": "node tests/profiles-live.mjs",
+    "test:requests": "node tests/requests-live.mjs",
+    "test:match": "node tests/match-live.mjs",
+    "test:applications": "node tests/applications-live.mjs",
+    "test:service": "node tests/service-live.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "vite": "^6.1.0"
+  }
+}

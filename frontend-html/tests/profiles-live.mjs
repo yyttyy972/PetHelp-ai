@@ -1,0 +1,61 @@
+// Requires local backend/database and Vite on 5174. Creates isolated test accounts.
+import {chromium, expect} from '@playwright/test';
+const base='http://127.0.0.1:5174';
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const suffix=Date.now();
+const errors=[];
+async function account(roles){
+  const account='html-profiles-'+roles.join('-')+'-'+suffix+'-'+crypto.randomUUID().slice(0,8);
+  const body={account,password:'ProfileTest2026!',display_name:'档案验收',roles};
+  const registered=await fetch(base+'/api/v0/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  expect(registered.status).toBe(201);
+  const response=await fetch(base+'/api/v0/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account,password:body.password})});
+  return (await response.json()).access_token;
+}
+try {
+  const token=await account(['owner','helper']);
+  const p=await browser.newPage({viewport:{width:390,height:844}});
+  p.on('pageerror',e=>errors.push(e.message));
+  await p.addInitScript(t=>sessionStorage.setItem('pethelp-html-token',t),token);
+  await p.goto(base+'/#bio');
+  await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});
+  await p.locator('#profile-form [name=display_name]').fill('档案验收更新');
+  await p.locator('#profile-form [name=address]').fill('测试社区');
+  await p.locator('#profile-form button').click();
+  await expect(p.locator('[data-screen=bio] .notice')).toHaveText('个人资料已保存');
+  await p.reload();await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});
+  await expect(p.locator('#profile-form [name=display_name]')).toHaveValue('档案验收更新');
+  await p.goto(base+'/#pet');await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});
+  const f=p.locator('#pet-form');
+  await f.locator('[name=name]').fill('验收猫');await f.locator('[name=birth_date]').fill('2023-01-01');
+  await f.locator('[name=photo]').setInputFiles('docs/home-mobile.png');
+  await f.getByRole('button',{name:'保存宠物',exact:true}).click();
+  await expect(p.locator('[data-screen=pet] .notice')).toHaveText('宠物档案已保存');
+  await expect(p.locator('#pet-list img')).toBeVisible();
+  expect(await p.locator('#pet-list img').evaluate(i=>i.naturalWidth)).toBeGreaterThan(0);
+  const petId=await p.locator('.pet-entry').getAttribute('data-id');
+  await p.locator('[data-edit]').click();await f.locator('[name=name]').fill('验收猫更新');await f.getByRole('button',{name:'保存宠物',exact:true}).click();
+  await expect(p.locator('#pet-list h2')).toHaveText('验收猫更新');
+  await p.reload();await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});await expect(p.locator('#pet-list h2')).toHaveText('验收猫更新');
+  await p.goto(base+'/#preferences');await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});
+  await expect(p.locator('[data-screen=preferences] .notice')).toContainText('请先保存');
+  const h=p.locator('#helper-form');
+  await h.locator('[value=home_visit]').check();await h.locator('[value=cat]').check();
+  await h.locator('[name=service_area]').fill('测试社区');await h.locator('[name=experience]').fill('熟悉猫咪日常照料');await h.locator('[name=service_radius_m]').fill('1000');
+  await h.getByRole('button',{name:'保存服务偏好'}).click();await expect(p.locator('[data-screen=preferences] .notice')).toHaveText('服务偏好已保存');
+  const a=p.locator('#availability-form');await a.locator('[name=start_at]').fill('2027-06-01T10:00');await a.locator('[name=end_at]').fill('2027-06-01T12:00');await a.locator('button').click();
+  await expect(p.locator('#availability-list .time-entry')).toHaveCount(1);
+  await p.reload();await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});await expect(h.locator('[name=service_area]')).toHaveValue('测试社区');await expect(p.locator('#availability-list .time-entry')).toHaveCount(1);
+  const own=await fetch(base+'/api/v0/helpers/me',{headers:{Authorization:'Bearer '+token}});expect(own.status).toBe(200);
+  const times=await (await fetch(base+'/api/v0/helpers/me/availability',{headers:{Authorization:'Bearer '+token}})).json();
+  const other=await account(['owner','helper']);
+  const isolated=await (await fetch(base+'/api/v0/pets',{headers:{Authorization:'Bearer '+other}})).json();expect(isolated.items).toHaveLength(0);
+  const denied=await fetch(base+'/api/v0/pets/'+petId,{method:'PATCH',headers:{Authorization:'Bearer '+other,'Content-Type':'application/json'},body:JSON.stringify({name:'越权'})});expect(denied.status).toBe(403);
+  const noHelper=await fetch(base+'/api/v0/helpers/me',{headers:{Authorization:'Bearer '+other}});expect(noHelper.status).toBe(404);
+  const unauth=await fetch(base+'/api/v0/helpers/me');expect(unauth.status).toBe(401);
+  await p.locator('[data-remove-time]').click();await expect(p.locator('#availability-list .time-entry')).toHaveCount(0);
+  await p.goto(base+'/#pet');await p.locator('[aria-labelledby=auth-title]').waitFor({state:'hidden'});p.on('dialog',d=>d.accept());await p.locator('[data-delete]').click();await expect(p.locator('.pet-entry')).toHaveCount(0);
+  await f.locator('[name=name]').fill('上传失败保留');await f.locator('[name=birth_date]').fill('2023-01-01');await f.locator('[name=photo]').setInputFiles({name:'bad.png',mimeType:'image/png',buffer:Buffer.from('invalid image')});await f.getByRole('button',{name:'保存宠物',exact:true}).click();await expect(p.locator('[data-screen=pet] .notice')).toContainText('图片无效');await expect(f.locator('[name=name]')).toHaveValue('上传失败保留');
+  expect(errors).toEqual([]);
+  console.log('PASS: profile persistence; pet upload/create/edit/delete; helper self/profile/time persistence; account isolation/403/401; invalid upload preserves inputs.');
+} finally {await browser.close();}
